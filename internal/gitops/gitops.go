@@ -1,35 +1,35 @@
-// Package gitops clones a profile repository and commits README/chart updates.
+// Package gitops clones a profile repository and publishes README/chart updates.
 package gitops
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/vihuvac/read-waka-stats/internal/githubx"
 	"github.com/vihuvac/read-waka-stats/internal/logging"
 )
 
-const singleCommitBranch = "latest_branch"
+// CommitPublisher creates a verified commit on a branch.
+type CommitPublisher interface {
+	CreateCommitOnBranch(ctx context.Context, in githubx.CreateCommitInput) (string, error)
+}
 
-// Options configure clone and commit behavior.
+// Options configure clone and publish behavior.
 type Options struct {
 	Owner         string
 	Repo          string
 	Token         string
 	WorkDir       string
-	PullBranch    string
-	PushBranch    string
+	Branch        string
 	DefaultBranch string
-	CommitSingle  bool
 	CommitMessage string
-	AuthorName    string
-	AuthorEmail   string
 	Log           *logging.Logger
 }
 
@@ -41,7 +41,7 @@ type Repository struct {
 	auth *githttp.BasicAuth
 }
 
-// Clone clones owner/repo into WorkDir.
+// Clone clones owner/repo into WorkDir at the target branch.
 func Clone(opts Options) (*Repository, error) {
 	if opts.WorkDir == "" {
 		opts.WorkDir = "repo"
@@ -50,16 +50,14 @@ func Clone(opts Options) (*Repository, error) {
 	auth := &githttp.BasicAuth{Username: "x-access-token", Password: opts.Token}
 	url := fmt.Sprintf("https://github.com/%s/%s.git", opts.Owner, opts.Repo)
 
+	branch := opts.Branch
+	if branch == "" {
+		branch = opts.DefaultBranch
+	}
+
 	cloneOpts := &git.CloneOptions{
 		URL:  url,
 		Auth: auth,
-	}
-	branch := opts.PushBranch
-	if opts.CommitSingle {
-		branch = opts.PullBranch
-	}
-	if branch == "" {
-		branch = opts.DefaultBranch
 	}
 	if branch != "" {
 		cloneOpts.ReferenceName = plumbing.NewBranchReferenceName(branch)
@@ -74,22 +72,16 @@ func Clone(opts Options) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	if opts.CommitSingle {
+	if branch == "" {
 		head, err := r.Head()
 		if err != nil {
 			return nil, err
 		}
-		orphan := plumbing.NewHashReference(plumbing.NewBranchReferenceName(singleCommitBranch), head.Hash())
-		if err := r.Storer.SetReference(orphan); err != nil {
-			return nil, err
-		}
-		if err := wt.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewBranchReferenceName(singleCommitBranch),
-			Force:  true,
-		}); err != nil {
-			return nil, err
+		if head.Name().IsBranch() {
+			branch = head.Name().Short()
 		}
 	}
+	opts.Branch = branch
 	return &Repository{opts: opts, repo: r, wt: wt, auth: auth}, nil
 }
 
@@ -103,52 +95,134 @@ func (r *Repository) Root() string {
 	return r.opts.WorkDir
 }
 
-// Add stages a file relative to the worktree.
-func (r *Repository) Add(rel string) error {
-	_, err := r.wt.Add(rel)
-	return err
+// Branch returns the cloned branch name.
+func (r *Repository) Branch() string {
+	return r.opts.Branch
 }
 
-// CommitAndPush creates a commit when the tree is dirty and pushes it.
-func (r *Repository) CommitAndPush() error {
-	status, err := r.wt.Status()
+// Owner returns the repository owner.
+func (r *Repository) Owner() string {
+	return r.opts.Owner
+}
+
+// RepoName returns the repository name.
+func (r *Repository) RepoName() string {
+	return r.opts.Repo
+}
+
+// HeadOID returns the current HEAD commit OID.
+func (r *Repository) HeadOID() (string, error) {
+	head, err := r.repo.Head()
+	if err != nil {
+		return "", err
+	}
+	return head.Hash().String(), nil
+}
+
+// Publish creates a verified commit for paths that differ from HEAD.
+// Unchanged paths are skipped. If every path is unchanged, Publish is a no-op.
+func (r *Repository) Publish(ctx context.Context, pub CommitPublisher, paths []string) error {
+	if pub == nil {
+		return fmt.Errorf("commit publisher is required")
+	}
+	additions, err := r.changedAdditions(paths)
 	if err != nil {
 		return err
 	}
-	if status.IsClean() {
+	if len(additions) == 0 {
 		if r.opts.Log != nil {
 			r.opts.Log.Success("No changes to commit")
 		}
 		return nil
 	}
-	sig := &object.Signature{
-		Name:  r.opts.AuthorName,
-		Email: r.opts.AuthorEmail,
-		When:  time.Now(),
-	}
-	_, err = r.wt.Commit(r.opts.CommitMessage, &git.CommitOptions{
-		Author:    sig,
-		Committer: sig,
-	})
+
+	oid, err := r.HeadOID()
 	if err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return fmt.Errorf("head oid: %w", err)
+	}
+	branch := r.opts.Branch
+	if branch == "" {
+		return fmt.Errorf("branch name is unresolved")
 	}
 
-	pushOpts := &git.PushOptions{Auth: r.auth}
-	if r.opts.CommitSingle {
-		target := r.opts.PushBranch
-		if target == "" {
-			target = r.opts.DefaultBranch
-		}
-		refSpec := fmt.Sprintf("+refs/heads/%s:refs/heads/%s", singleCommitBranch, target)
-		pushOpts.RefSpecs = []gitconfig.RefSpec{gitconfig.RefSpec(refSpec)}
-		pushOpts.Force = true
-	}
-	if err := r.repo.Push(pushOpts); err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("push: %w", err)
+	commitOID, err := pub.CreateCommitOnBranch(ctx, githubx.CreateCommitInput{
+		Owner:           r.opts.Owner,
+		Repo:            r.opts.Repo,
+		BranchName:      branch,
+		Message:         r.opts.CommitMessage,
+		ExpectedHeadOid: oid,
+		FileAdditions:   additions,
+	})
+	if err != nil {
+		return err
 	}
 	if r.opts.Log != nil {
-		r.opts.Log.Success("Repository synchronized")
+		r.opts.Log.Success("Published verified commit %s", commitOID)
 	}
 	return nil
+}
+
+func (r *Repository) changedAdditions(paths []string) ([]githubx.FileAddition, error) {
+	seen := make(map[string]struct{}, len(paths))
+	var out []githubx.FileAddition
+	for _, rel := range paths {
+		rel = filepath.ToSlash(rel)
+		if rel == "" {
+			continue
+		}
+		if _, ok := seen[rel]; ok {
+			continue
+		}
+		seen[rel] = struct{}{}
+
+		data, err := os.ReadFile(r.Path(rel))
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", rel, err)
+		}
+		same, err := r.matchesHead(rel, data)
+		if err != nil {
+			return nil, err
+		}
+		if same {
+			continue
+		}
+		out = append(out, githubx.FileAddition{Path: rel, Contents: data})
+	}
+	return out, nil
+}
+
+func (r *Repository) matchesHead(rel string, data []byte) (bool, error) {
+	head, err := r.repo.Head()
+	if err != nil {
+		return false, err
+	}
+	commit, err := r.repo.CommitObject(head.Hash())
+	if err != nil {
+		return false, err
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return false, err
+	}
+	file, err := tree.File(rel)
+	if err != nil {
+		if err == object.ErrFileNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	blob, err := r.repo.BlobObject(file.Hash)
+	if err != nil {
+		return false, err
+	}
+	reader, err := blob.Reader()
+	if err != nil {
+		return false, err
+	}
+	defer reader.Close()
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(reader); err != nil {
+		return false, err
+	}
+	return bytes.Equal(buf.Bytes(), data), nil
 }
