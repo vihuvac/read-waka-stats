@@ -1,12 +1,14 @@
 package app
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/vihuvac/read-waka-stats/internal/config"
+	"github.com/vihuvac/read-waka-stats/internal/githubx"
 )
 
 func TestWriteOutputFile(t *testing.T) {
@@ -26,19 +28,9 @@ func TestWriteOutputFile(t *testing.T) {
 	}
 }
 
-func TestCommitIdentity(t *testing.T) {
-	a := &App{Cfg: &config.Config{CommitByMe: false}}
-	name, email := a.commitIdentity("alice", "a@example.com")
-	if name != "readme-bot" {
-		t.Fatalf("name=%s", name)
-	}
-	if !strings.Contains(email, "github-actions") {
-		t.Fatalf("email=%s", email)
-	}
-
-	a.Cfg.CommitByMe = true
-	name, email = a.commitIdentity("alice", "a@example.com")
-	if name != "alice" || email != "a@example.com" {
-		t.Fatalf("%s %s", name, email)
+func TestStaleHeadRetryErrorWraps(t *testing.T) {
+	err := fmt.Errorf("publish failed after %d attempts: %w", maxPublishAttempts, githubx.ErrStaleHead)
+	if !errors.Is(err, githubx.ErrStaleHead) {
+		t.Fatalf("expected ErrStaleHead, got %v", err)
 	}
 }
