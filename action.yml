@@ -1,0 +1,195 @@
+name: 'Read Waka Stats'
+author: 'Víctor Valle Castillo'
+description: 'Dynamically update your GitHub profile README with WakaTime and GitHub development metrics'
+branding:
+  icon: activity
+  color: orange
+
+inputs:
+  GH_TOKEN:
+    description: 'GitHub token with permission to read profile data and commit to the profile repository'
+    required: true
+    default: ${{ github.token }}
+
+  PUSH_TOKEN:
+    description: 'Optional token used only for git push. Use a fine-scoped token if you want to keep GH_TOKEN read-only'
+    required: false
+    default: ${{ github.token }}
+
+  GH_USER:
+    description: 'GitHub username to collect stats for. Defaults to the token owner'
+    required: false
+    default: ''
+
+  WAKATIME_API_KEY:
+    description: 'WakaTime API key'
+    required: true
+
+  WAKATIME_API_URL:
+    description: 'WakaTime API base URL'
+    required: false
+    default: 'https://wakatime.com/api/v1/'
+
+  SECTION_NAME:
+    description: 'README section marker name (<!--START_SECTION:name-->)'
+    required: false
+    default: 'waka'
+
+  PULL_BRANCH_NAME:
+    description: 'Branch to clone when COMMIT_SINGLE is enabled'
+    required: false
+    default: ''
+
+  PUSH_BRANCH_NAME:
+    description: 'Branch to update. Empty uses the repository default branch'
+    required: false
+    default: ''
+
+  SHOW_OS:
+    description: 'Show operating system stats'
+    required: false
+    default: 'true'
+
+  SHOW_PROJECTS:
+    description: 'Show project stats'
+    required: false
+    default: 'true'
+
+  SHOW_EDITORS:
+    description: 'Show editor stats'
+    required: false
+    default: 'true'
+
+  SHOW_TIMEZONE:
+    description: 'Show WakaTime timezone'
+    required: false
+    default: 'true'
+
+  SHOW_COMMIT:
+    description: 'Show early-bird / night-owl commit hours'
+    required: false
+    default: 'true'
+
+  SHOW_LANGUAGE:
+    description: 'Show programming language stats'
+    required: false
+    default: 'true'
+
+  SHOW_LINES_OF_CODE:
+    description: 'Show lifetime lines-of-code badge from GitHub commit history'
+    required: false
+    default: 'false'
+
+  SHOW_LANGUAGE_PER_REPO:
+    description: 'Show language distribution across repositories'
+    required: false
+    default: 'true'
+
+  SHOW_LOC_CHART:
+    description: 'Generate and commit a quarterly lines-of-code PNG chart'
+    required: false
+    default: 'true'
+
+  SHOW_DAYS_OF_WEEK:
+    description: 'Show most productive weekday'
+    required: false
+    default: 'true'
+
+  SHOW_PROFILE_VIEWS:
+    description: 'Show profile repository traffic views'
+    required: false
+    default: 'true'
+
+  SHOW_SHORT_INFO:
+    description: 'Show GitHub profile facts'
+    required: false
+    default: 'true'
+
+  SHOW_UPDATED_DATE:
+    description: 'Append last updated timestamp'
+    required: false
+    default: 'true'
+
+  SHOW_TOTAL_CODE_TIME:
+    description: 'Show all-time WakaTime coding badge'
+    required: false
+    default: 'true'
+
+  SHOW_AI_CODE_TIME:
+    description: 'Show all-time WakaTime AI coding badge'
+    required: false
+    default: 'true'
+
+  SHOW_AI_CODING:
+    description: 'Show weekly AI coding breakdown'
+    required: false
+    default: 'true'
+
+  COMMIT_BY_ME:
+    description: 'Commit as the GitHub user instead of readme-bot'
+    required: false
+    default: 'false'
+
+  COMMIT_MESSAGE:
+    description: 'Commit message for README updates'
+    required: false
+    default: 'Updated with Dev Metrics'
+
+  COMMIT_USERNAME:
+    description: 'Override git commit author name'
+    required: false
+    default: ''
+
+  COMMIT_EMAIL:
+    description: 'Override git commit author email'
+    required: false
+    default: ''
+
+  COMMIT_SINGLE:
+    description: 'Replace branch history with a single commit on each run'
+    required: false
+    default: 'false'
+
+  LOCALE:
+    description: 'UI locale (see README for supported values)'
+    required: false
+    default: 'en'
+
+  UPDATED_DATE_FORMAT:
+    description: 'Last-updated timestamp format (strftime tokens such as %d/%m/%Y %H:%M:%S)'
+    required: false
+    default: '%d/%m/%Y %H:%M:%S'
+
+  IGNORED_REPOS:
+    description: 'Comma-separated repository names excluded from language and commit stats'
+    required: false
+    default: ''
+
+  MAX_REPOS:
+    description: 'Maximum repositories to fetch (0 = unlimited)'
+    required: false
+    default: '0'
+
+  SHOW_LANGUAGE_COUNT:
+    description: 'How many languages to list after sorting the full dataset'
+    required: false
+    default: '5'
+
+  SYMBOL_VERSION:
+    description: 'Progress bar symbols: 1=█░  2=⣿⣀  3=⬛⬜'
+    required: false
+    default: '1'
+
+  BADGE_STYLE:
+    description: 'shields.io badge style (flat, flat-square, plastic, for-the-badge, social)'
+    required: false
+    default: 'flat'
+
+  DEBUG_LOGGING:
+    description: 'Enable verbose logs'
+    required: false
+    default: ${{ runner.debug }}
+
+runs:
+  using: docker
+  image: Dockerfile
