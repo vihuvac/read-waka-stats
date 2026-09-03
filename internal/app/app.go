@@ -4,9 +4,11 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +24,8 @@ import (
 	"github.com/vihuvac/read-waka-stats/internal/render"
 	"github.com/vihuvac/read-waka-stats/internal/wakatime"
 )
+
+const maxPublishAttempts = 3
 
 // App is the action runtime.
 type App struct {
@@ -112,7 +116,6 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 
-	var gitRepo *gitops.Repository
 	readmePath := "README.md"
 	defaultBranch := "main"
 	if !a.Cfg.DebugRun {
@@ -123,24 +126,10 @@ func (a *App) Run(ctx context.Context) error {
 			readmePath = meta.Readme
 			defaultBranch = meta.DefaultBranch
 		}
-		authorName, authorEmail := a.commitIdentity(user.Login, user.Email)
-		gitRepo, err = gitops.Clone(gitops.Options{
-			Owner:         user.Login,
-			Repo:          user.Login,
-			Token:         a.Cfg.PushToken,
-			WorkDir:       "repo",
-			PullBranch:    a.Cfg.PullBranchName,
-			PushBranch:    a.Cfg.PushBranchName,
-			DefaultBranch: defaultBranch,
-			CommitSingle:  a.Cfg.CommitSingle,
-			CommitMessage: a.Cfg.CommitMessage,
-			AuthorName:    authorName,
-			AuthorEmail:   authorEmail,
-			Log:           a.Log,
-		})
-		if err != nil {
-			return fmt.Errorf("clone profile repo: %w", err)
-		}
+	}
+	branch := a.Cfg.PushBranchName
+	if branch == "" {
+		branch = defaultBranch
 	}
 
 	if a.Cfg.ShowProfileViews {
@@ -193,31 +182,37 @@ func (a *App) Run(ctx context.Context) error {
 		stats.WriteString(rnd.LanguagePerRepo(repos))
 	}
 
+	var chartBytes []byte
 	if a.Cfg.ShowLOCChart {
-		chartRel := chart.Path
-		chartDest := chartRel
-		if gitRepo != nil {
-			chartDest = gitRepo.Path(chartRel)
-		}
 		colors, err := gh.FetchLinguistColors(ctx)
 		if err != nil {
 			a.Log.Warn("linguist colors unavailable: %v", err)
 			colors = githubx.LinguistColors{}
 		}
+		chartDest := chart.Path
+		if !a.Cfg.DebugRun {
+			tmp, err := os.MkdirTemp("", "read-waka-stats-chart-*")
+			if err != nil {
+				a.Log.Warn("chart temp dir: %v", err)
+			} else {
+				defer os.RemoveAll(tmp)
+				chartDest = filepath.Join(tmp, filepath.Base(chart.Path))
+			}
+		}
 		if err := chart.Draw(commitResult.Yearly, colors, chartDest); err != nil {
 			a.Log.Warn("chart: %v", err)
-		} else if gitRepo != nil {
-			if err := gitRepo.Add(chartRel); err != nil {
-				a.Log.Warn("staging chart: %v", err)
-			}
-			branch := a.Cfg.PushBranchName
-			if branch == "" {
-				branch = defaultBranch
-			}
-			imageURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", user.Login, user.Login, branch, chartRel)
-			stats.WriteString(rnd.TimelineImage(imageURL))
 		} else {
-			stats.WriteString(rnd.TimelineImage(chartRel))
+			if data, err := os.ReadFile(chartDest); err != nil {
+				a.Log.Warn("read chart: %v", err)
+			} else {
+				chartBytes = data
+			}
+			if a.Cfg.DebugRun {
+				stats.WriteString(rnd.TimelineImage(chart.Path))
+			} else {
+				imageURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", user.Login, user.Login, branch, chart.Path)
+				stats.WriteString(rnd.TimelineImage(imageURL))
+			}
 		}
 	}
 
@@ -228,14 +223,61 @@ func (a *App) Run(ctx context.Context) error {
 		return writeOutput(content)
 	}
 
-	fullReadme := gitRepo.Path(readmePath)
-	if err := readme.UpdateFile(fullReadme, a.Cfg.SectionName, content); err != nil {
-		return err
+	pushGH := &githubx.Client{HTTP: a.HTTP, Token: a.Cfg.PushToken, Log: a.Log}
+	return a.publishVerified(ctx, pushGH, user.Login, branch, defaultBranch, readmePath, content, chartBytes)
+}
+
+func (a *App) publishVerified(
+	ctx context.Context,
+	pushGH *githubx.Client,
+	owner, branch, defaultBranch, readmePath, content string,
+	chartBytes []byte,
+) error {
+	var lastErr error
+	for attempt := 1; attempt <= maxPublishAttempts; attempt++ {
+		gitRepo, err := gitops.Clone(gitops.Options{
+			Owner:         owner,
+			Repo:          owner,
+			Token:         a.Cfg.PushToken,
+			WorkDir:       "repo",
+			Branch:        branch,
+			DefaultBranch: defaultBranch,
+			CommitMessage: a.Cfg.CommitMessage,
+			Log:           a.Log,
+		})
+		if err != nil {
+			return fmt.Errorf("clone profile repo: %w", err)
+		}
+
+		paths := make([]string, 0, 2)
+		if len(chartBytes) > 0 {
+			chartDest := gitRepo.Path(chart.Path)
+			if err := os.MkdirAll(filepath.Dir(chartDest), 0o755); err != nil {
+				return fmt.Errorf("chart dir: %w", err)
+			}
+			if err := os.WriteFile(chartDest, chartBytes, 0o644); err != nil {
+				return fmt.Errorf("write chart: %w", err)
+			}
+			paths = append(paths, chart.Path)
+		}
+
+		fullReadme := gitRepo.Path(readmePath)
+		if err := readme.UpdateFile(fullReadme, a.Cfg.SectionName, content); err != nil {
+			return err
+		}
+		paths = append(paths, readmePath)
+
+		err = gitRepo.Publish(ctx, pushGH, paths)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !errors.Is(err, githubx.ErrStaleHead) {
+			return err
+		}
+		a.Log.Warn("branch tip changed during publish, retrying (%d/%d)", attempt, maxPublishAttempts)
 	}
-	if err := gitRepo.Add(readmePath); err != nil {
-		return err
-	}
-	return gitRepo.CommitAndPush()
+	return fmt.Errorf("publish failed after %d attempts: %w", maxPublishAttempts, lastErr)
 }
 
 type repoMeta struct {
@@ -273,32 +315,6 @@ func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login string
 		}
 	}
 	return meta, nil
-}
-
-func (a *App) commitIdentity(login, email string) (string, string) {
-	if a.Cfg.CommitByMe {
-		name := a.Cfg.CommitUsername
-		if name == "" {
-			name = login
-		}
-		mail := a.Cfg.CommitEmail
-		if mail == "" {
-			mail = email
-		}
-		if mail == "" {
-			mail = "41898282+github-actions[bot]@users.noreply.github.com"
-		}
-		return name, mail
-	}
-	name := a.Cfg.CommitUsername
-	if name == "" {
-		name = "readme-bot"
-	}
-	mail := a.Cfg.CommitEmail
-	if mail == "" {
-		mail = "41898282+github-actions[bot]@users.noreply.github.com"
-	}
-	return name, mail
 }
 
 func writeOutput(stats string) error {
