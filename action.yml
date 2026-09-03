@@ -7,12 +7,12 @@ branding:
 
 inputs:
   GH_TOKEN:
-    description: 'GitHub token with permission to read profile data and commit to the profile repository'
+    description: 'GitHub token with permission to read profile data and publish verified commits to the profile repository'
     required: true
     default: ${{ github.token }}
 
   PUSH_TOKEN:
-    description: 'Optional token used only for git push. Use a fine-scoped token if you want to keep GH_TOKEN read-only'
+    description: 'Optional token used only for verified commit publish. Use a fine-scoped token if you want to keep GH_TOKEN read-only'
     required: false
     default: ${{ github.token }}
 
@@ -34,11 +34,6 @@ inputs:
     description: 'README section marker name (<!--START_SECTION:name-->)'
     required: false
     default: 'waka'
-
-  PULL_BRANCH_NAME:
-    description: 'Branch to clone when COMMIT_SINGLE is enabled'
-    required: false
-    default: ''
 
   PUSH_BRANCH_NAME:
     description: 'Branch to update. Empty uses the repository default branch'
@@ -125,30 +120,10 @@ inputs:
     required: false
     default: 'true'
 
-  COMMIT_BY_ME:
-    description: 'Commit as the GitHub user instead of readme-bot'
-    required: false
-    default: 'false'
-
   COMMIT_MESSAGE:
     description: 'Commit message for README updates'
     required: false
     default: 'Updated with Dev Metrics'
-
-  COMMIT_USERNAME:
-    description: 'Override git commit author name'
-    required: false
-    default: ''
-
-  COMMIT_EMAIL:
-    description: 'Override git commit author email'
-    required: false
-    default: ''
-
-  COMMIT_SINGLE:
-    description: 'Replace branch history with a single commit on each run'
-    required: false
-    default: 'false'
 
   LOCALE:
     description: 'UI locale (see README for supported values)'

@@ -18,7 +18,6 @@ type Config struct {
 	WakaTimeAPIKey    string
 	WakaTimeAPIURL    string
 	SectionName       string
-	PullBranchName    string
 	PushBranchName    string
 	ShowOS            bool
 	ShowProjects      bool
@@ -36,12 +35,7 @@ type Config struct {
 	ShowTotalCodeTime bool
 	ShowAICodeTime    bool
 	ShowAICoding      bool
-	CommitByMe        bool
 	CommitMessage     string
-	CommitUsername    string
-	CommitEmail       string
-	CommitSingle      bool
-	ForceAdd          bool
 	Locale            string
 	UpdatedDateFormat string
 	IgnoredRepos      []string
@@ -64,7 +58,6 @@ func Load() (*Config, error) {
 		WakaTimeAPIKey:    os.Getenv("INPUT_WAKATIME_API_KEY"),
 		WakaTimeAPIURL:    getenvDefault("INPUT_WAKATIME_API_URL", "https://wakatime.com/api/v1/"),
 		SectionName:       getenvDefault("INPUT_SECTION_NAME", "waka"),
-		PullBranchName:    os.Getenv("INPUT_PULL_BRANCH_NAME"),
 		PushBranchName:    os.Getenv("INPUT_PUSH_BRANCH_NAME"),
 		ShowOS:            truthyDefault("INPUT_SHOW_OS", true),
 		ShowProjects:      truthyDefault("INPUT_SHOW_PROJECTS", true),
@@ -82,12 +75,7 @@ func Load() (*Config, error) {
 		ShowTotalCodeTime: truthyDefault("INPUT_SHOW_TOTAL_CODE_TIME", true),
 		ShowAICodeTime:    truthyDefault("INPUT_SHOW_AI_CODE_TIME", true),
 		ShowAICoding:      truthyDefault("INPUT_SHOW_AI_CODING", true),
-		CommitByMe:        truthyDefault("INPUT_COMMIT_BY_ME", false),
 		CommitMessage:     getenvDefault("INPUT_COMMIT_MESSAGE", "Updated with Dev Metrics"),
-		CommitUsername:    os.Getenv("INPUT_COMMIT_USERNAME"),
-		CommitEmail:       os.Getenv("INPUT_COMMIT_EMAIL"),
-		CommitSingle:      truthyDefault("INPUT_COMMIT_SINGLE", false),
-		ForceAdd:          truthyDefault("INPUT_FORCE_ADD", false),
 		Locale:            getenvDefault("INPUT_LOCALE", "en"),
 		UpdatedDateFormat: pythonToGoTime(getenvDefault("INPUT_UPDATED_DATE_FORMAT", "%d/%m/%Y %H:%M:%S")),
 		IgnoredRepos:      parseList(os.Getenv("INPUT_IGNORED_REPOS")),
