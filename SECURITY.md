@@ -6,7 +6,7 @@
 | ------- | --------- |
 | 1.0.x   | ✅        |
 
-Security updates are provided for the latest minor release in the 1.0 series.
+Security updates are provided for all releases in the 1.0.x series.
 
 ## Reporting a Vulnerability
 
