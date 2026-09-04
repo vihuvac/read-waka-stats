@@ -3,6 +3,7 @@ package githubx
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -672,18 +673,25 @@ func TestPaginateAndBranchUnmarshalErrors(t *testing.T) {
 }
 
 func TestFetchNetworkErrors(t *testing.T) {
-	c := &Client{HTTP: &httpx.Client{HTTP: &http.Client{Timeout: 50 * time.Millisecond}, Retries: 1}, Token: "t", APIBase: "http://127.0.0.1:1"}
+	// Deterministic transport failure — do not rely on unreachable hosts or live URLs
+	// (CI runners can reach the public internet; laptops often cannot).
+	rt := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("network down")
+	})
+	httpClient := &http.Client{Transport: rt, Timeout: time.Second}
+	hx := &httpx.Client{HTTP: httpClient, Retries: 1}
+
+	c := &Client{HTTP: hx, Token: "t", APIBase: "http://example.invalid"}
 	if _, err := c.FetchUser(context.Background(), ""); err == nil {
 		t.Fatal("expected error")
 	}
 	if _, err := c.FetchProfileViews(context.Background(), "a/a"); err == nil {
 		t.Fatal("expected error")
 	}
-	c2 := &Client{HTTP: &httpx.Client{HTTP: &http.Client{Timeout: 50 * time.Millisecond}, Retries: 1}}
-	if _, err := c2.FetchContributions(context.Background(), "a"); err == nil {
+	if _, err := c.FetchContributions(context.Background(), "a"); err == nil {
 		t.Fatal("expected error")
 	}
-	if _, err := c2.FetchLinguistColors(context.Background()); err == nil {
+	if _, err := c.FetchLinguistColors(context.Background()); err == nil {
 		t.Fatal("expected error")
 	}
 }
