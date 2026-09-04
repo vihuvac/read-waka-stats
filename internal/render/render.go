@@ -297,7 +297,8 @@ func (r *Renderer) AICodingStats(data wakatime.Data) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🤖 **%s** \n\n```text\n", r.t("AI Coding This Week")))
 	if ai == nil || data.AISessions == 0 {
-		b.WriteString(r.t("No AI Coding Activity Tracked This Week") + "\n```\n\n")
+		b.WriteString(r.t("No AI Coding Activity Tracked This Week"))
+		b.WriteString("\n```\n\n")
 		return b.String()
 	}
 
@@ -334,10 +335,12 @@ func (r *Renderer) AICodingStats(data wakatime.Data) string {
 				Percent: math.Round(float64(m.Lines)/float64(totalLines)*10000) / 100,
 			})
 		}
-		b.WriteString(MakeList(items, 5, true, r.Cfg.SymbolVersion) + "\n\n")
+		b.WriteString(MakeList(items, 5, true, r.Cfg.SymbolVersion))
+		b.WriteString("\n\n")
 	}
 
-	b.WriteString(r.aiInsights(aiWritten, data.AIPromptLengthAvg, data.AIPromptEventsAvgPerSession, manual) + "\n")
+	b.WriteString(r.aiInsights(aiWritten, data.AIPromptLengthAvg, data.AIPromptEventsAvgPerSession, manual))
+	b.WriteString("\n")
 	s := strings.TrimSuffix(b.String(), "\n")
 	return s + "```\n\n"
 }
@@ -367,10 +370,14 @@ func (r *Renderer) aiInsights(aiWritten, promptLen, promptsPerSession, manual fl
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🔎 %s:\n", r.t("AI Coding Insights")))
-	b.WriteString(sprintf(r.t("AI Reliance Detail"), reliance, fmt.Sprintf("%.2f", aiWritten)) + "\n")
-	b.WriteString(sprintf(r.t("Prompt Style Detail"), promptStyle, intcomma(int(math.Round(promptLen)))) + "\n")
-	b.WriteString(sprintf(r.t("Session Style Detail"), session, fmt.Sprintf("%.1f", promptsPerSession)) + "\n")
-	b.WriteString(sprintf(r.t("Review Style Detail"), review, fmt.Sprintf("%.2f", manual)) + "\n")
+	b.WriteString(sprintf(r.t("AI Reliance Detail"), reliance, fmt.Sprintf("%.2f", aiWritten)))
+	b.WriteString("\n")
+	b.WriteString(sprintf(r.t("Prompt Style Detail"), promptStyle, intcomma(int(math.Round(promptLen)))))
+	b.WriteString("\n")
+	b.WriteString(sprintf(r.t("Session Style Detail"), session, fmt.Sprintf("%.1f", promptsPerSession)))
+	b.WriteString("\n")
+	b.WriteString(sprintf(r.t("Review Style Detail"), review, fmt.Sprintf("%.2f", manual)))
+	b.WriteString("\n")
 	return b.String()
 }
 
