@@ -9,6 +9,11 @@ on:
       - "internal/**"
       - "go.mod"
       - "go.sum"
+      - "action.yml"
+      - "Dockerfile"
+      - "Dockerfile.dev"
+      - "docker-compose.yml"
+      - "Makefile"
       - ".github/workflows/ci.yml"
 
   pull_request:
@@ -19,6 +24,11 @@ on:
       - "internal/**"
       - "go.mod"
       - "go.sum"
+      - "action.yml"
+      - "Dockerfile"
+      - "Dockerfile.dev"
+      - "docker-compose.yml"
+      - "Makefile"
       - ".github/workflows/ci.yml"
 
   # Manual runs (Actions → CI → Run workflow); not gated by path filters
