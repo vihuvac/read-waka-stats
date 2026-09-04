@@ -31,6 +31,8 @@ type Options struct {
 	DefaultBranch string
 	CommitMessage string
 	Log           *logging.Logger
+	// URL overrides the default https://github.com/{owner}/{repo}.git clone URL (tests).
+	URL string
 }
 
 // Repository is a cloned git worktree.
@@ -48,7 +50,10 @@ func Clone(opts Options) (*Repository, error) {
 	}
 	_ = os.RemoveAll(opts.WorkDir)
 	auth := &githttp.BasicAuth{Username: "x-access-token", Password: opts.Token}
-	url := fmt.Sprintf("https://github.com/%s/%s.git", opts.Owner, opts.Repo)
+	cloneURL := opts.URL
+	if cloneURL == "" {
+		cloneURL = fmt.Sprintf("https://github.com/%s/%s.git", opts.Owner, opts.Repo)
+	}
 
 	branch := opts.Branch
 	if branch == "" {
@@ -56,7 +61,7 @@ func Clone(opts Options) (*Repository, error) {
 	}
 
 	cloneOpts := &git.CloneOptions{
-		URL:  url,
+		URL:  cloneURL,
 		Auth: auth,
 	}
 	if branch != "" {
