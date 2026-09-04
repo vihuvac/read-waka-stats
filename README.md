@@ -55,7 +55,8 @@ In the profile repository (`USERNAME/USERNAME`):
 | Secret | Purpose |
 | --- | --- |
 | `WAKATIME_API_KEY` | From [WakaTime API settings](https://wakatime.com/settings/api-key) |
-| `GH_TOKEN` | Optional override. The default `github.token` works if the workflow has `contents: write` (and `metadata: read`). For private-repo stats and profile views, a PAT with `repo` and `user` scopes is more complete |
+| `GH_TOKEN` | Optional. Omit to use `${{ github.token }}` for API reads (and publish when `PUSH_TOKEN` is also omitted). Use a PAT for private-repo stats and profile views |
+| `PUSH_TOKEN` | Optional write token for verified publish only. Use when `main` requires PRs and the token owner (or GitHub Actions) is on the ruleset bypass list |
 
 ### 2. README markers
 
@@ -83,12 +84,11 @@ jobs:
       - uses: vihuvac/read-waka-stats@v1.0.0
         with:
           WAKATIME_API_KEY: ${{ secrets.WAKATIME_API_KEY }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
 ```
 
 Pin a release tag such as `@v1.0.0` (prefer tags over `@main`). Bump the tag when you upgrade.
 
-If you omit `GH_TOKEN`, the action uses `${{ github.token }}`. Grant `contents: write` so the action can publish README and chart updates.
+Omit `GH_TOKEN` to use `${{ github.token }}`. Grant `contents: write` so the action can publish README and chart updates. For protected default branches that require pull requests, set `PUSH_TOKEN` to a PAT whose owner can bypass that rule (or allow the GitHub Actions app to bypass).
 
 ## Verified commits
 
@@ -98,10 +98,12 @@ This action publishes README and chart updates with GitHub’s [`createCommitOnB
 
 | Token | Commit author | Verified? |
 | --- | --- | --- |
-| `${{ github.token }}` (default) | `github-actions[bot]` | Yes |
+| `${{ github.token }}` (default when `PUSH_TOKEN` omitted and `GH_TOKEN` uses default) | `github-actions[bot]` | Yes |
 | PAT / fine-grained token / GitHub App installation token | Token owner / app | Yes |
 
 Commits are **append-only** on `PUSH_BRANCH_NAME` (or the repository default branch). Concurrent tip changes are retried a few times.
+
+If the target branch requires pull requests, `createCommitOnBranch` is rejected unless the publish identity is on the ruleset bypass list. Pass `PUSH_TOKEN` for that identity, or allow GitHub Actions to bypass when using `${{ github.token }}`.
 
 ## Configuration
 
@@ -109,8 +111,8 @@ Booleans accept `true`, `false`, `1`, `0`, `yes`, and `no`.
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `GH_TOKEN` | `${{ github.token }}` | GitHub token for API reads and, unless `PUSH_TOKEN` is set, verified publish |
-| `PUSH_TOKEN` | `${{ github.token }}` | Token used only for clone and verified commit publish |
+| `GH_TOKEN` | `${{ github.token }}` | GitHub token for API reads; also used for verified publish when `PUSH_TOKEN` is omitted |
+| `PUSH_TOKEN` | empty → `GH_TOKEN` | Optional token for clone and verified commit publish only |
 | `GH_USER` | token owner | Username to collect stats for |
 | `WAKATIME_API_KEY` | required | WakaTime API key |
 | `WAKATIME_API_URL` | `https://wakatime.com/api/v1/` | API base URL |
@@ -199,7 +201,7 @@ Requirements: Go 1.24+.
 ## Security
 
 - Prefer `contents: write` on `github.token` for public profile repos.
-- A classic PAT with `repo` is only needed for private repository stats, private profile repos, and traffic APIs.
+- Fine-grained tokens: Metadata + Contents read for debug/API reads; Contents read+write for publish; Administration read when profile views are enabled.
 - `PUSH_TOKEN` can be a dedicated write token so `GH_TOKEN` stays read-oriented.
 - Do not log API keys. The WakaTime key is sent as a query parameter because that is how the WakaTime API authenticates.
 

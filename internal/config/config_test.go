@@ -23,6 +23,7 @@ func TestLoadRequiresTokens(t *testing.T) {
 
 func TestLoadDefaultsAndParsing(t *testing.T) {
 	t.Setenv("INPUT_GH_TOKEN", "token")
+	t.Setenv("INPUT_PUSH_TOKEN", "")
 	t.Setenv("INPUT_WAKATIME_API_KEY", "waka")
 	t.Setenv("INPUT_SHOW_OS", "yes")
 	t.Setenv("INPUT_SHOW_LINES_OF_CODE", "0")
@@ -62,6 +63,23 @@ func TestLoadDefaultsAndParsing(t *testing.T) {
 	}
 	if !cfg.NeedsCommitData() {
 		t.Fatal("NeedsCommitData expected true with default ShowLOCChart")
+	}
+}
+
+func TestLoadPushTokenPreferredOverGHToken(t *testing.T) {
+	t.Setenv("INPUT_GH_TOKEN", "read-token")
+	t.Setenv("INPUT_PUSH_TOKEN", "write-token")
+	t.Setenv("INPUT_WAKATIME_API_KEY", "waka")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.GHToken != "read-token" {
+		t.Fatalf("GHToken = %q", cfg.GHToken)
+	}
+	if cfg.PushToken != "write-token" {
+		t.Fatalf("PushToken = %q, want write-token", cfg.PushToken)
 	}
 }
 
