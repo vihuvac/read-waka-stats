@@ -18,10 +18,7 @@ func Markers(section string) (start, end string) {
 func Replace(contents, section, stats string) (string, bool, error) {
 	start, end := Markers(section)
 	pattern := regexp.QuoteMeta(start) + `[\s\S]*?` + regexp.QuoteMeta(end)
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return "", false, err
-	}
+	re := regexp.MustCompile(pattern)
 	if !re.MatchString(contents) {
 		return contents, false, fmt.Errorf("section markers %s ... %s not found", start, end)
 	}

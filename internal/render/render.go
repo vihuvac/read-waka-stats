@@ -81,12 +81,6 @@ func MakeGraph(percent float64, version int) string {
 		pair = symbolPairs[1]
 	}
 	filled := int(math.Round(percent / 4))
-	if filled < 0 {
-		filled = 0
-	}
-	if filled > 25 {
-		filled = 25
-	}
 	return strings.Repeat(pair[0], filled) + strings.Repeat(pair[1], 25-filled)
 }
 
