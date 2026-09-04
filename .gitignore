@@ -30,7 +30,10 @@ go.work.sum
 
 # Local build artifacts
 bin/
+
+# Local debug chart output from docker-run / DEBUG_RUN (do not commit personal charts)
 assets/
+!examples/assets/
 
 # Editor/IDE
 # .idea/

@@ -1,0 +1,25 @@
+# Full profile section (most features on).
+# Copy this step into your profile workflow. Bump the tag when upgrading.
+- uses: vihuvac/read-waka-stats@v1.0.0
+  with:
+    WAKATIME_API_KEY: ${{ secrets.WAKATIME_API_KEY }}
+    GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    SHOW_OS: "true"
+    SHOW_PROJECTS: "true"
+    SHOW_EDITORS: "true"
+    SHOW_TIMEZONE: "true"
+    SHOW_COMMIT: "true"
+    SHOW_LANGUAGE: "true"
+    SHOW_LINES_OF_CODE: "false"
+    SHOW_LANGUAGE_PER_REPO: "true"
+    SHOW_LOC_CHART: "true"
+    SHOW_DAYS_OF_WEEK: "true"
+    SHOW_PROFILE_VIEWS: "true"
+    SHOW_SHORT_INFO: "true"
+    SHOW_UPDATED_DATE: "true"
+    SHOW_TOTAL_CODE_TIME: "true"
+    SHOW_AI_CODE_TIME: "true"
+    SHOW_AI_CODING: "true"
+    SHOW_LANGUAGE_COUNT: "5"
+    SYMBOL_VERSION: "1"
+    LOCALE: "en"
