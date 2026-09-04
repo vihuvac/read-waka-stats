@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,36 @@ type Repository struct {
 type YearContrib struct {
 	Year  int `json:"year"`
 	Total int `json:"total"`
+}
+
+// UnmarshalJSON accepts year as either a JSON number or a string (API drift).
+func (y *YearContrib) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Year  json.RawMessage `json:"year"`
+		Total int             `json:"total"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	y.Total = raw.Total
+	if len(raw.Year) == 0 || string(raw.Year) == "null" {
+		return nil
+	}
+	var asInt int
+	if err := json.Unmarshal(raw.Year, &asInt); err == nil {
+		y.Year = asInt
+		return nil
+	}
+	var asStr string
+	if err := json.Unmarshal(raw.Year, &asStr); err != nil {
+		return fmt.Errorf("year: %w", err)
+	}
+	n, err := strconv.Atoi(asStr)
+	if err != nil {
+		return fmt.Errorf("year: %w", err)
+	}
+	y.Year = n
+	return nil
 }
 
 // Client accesses GitHub APIs.
