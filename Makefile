@@ -1,4 +1,4 @@
-.PHONY: test vet build
+.PHONY: test vet build docker-run
 
 test:
 	go test ./... -count=1
@@ -8,3 +8,6 @@ vet:
 
 build:
 	CGO_ENABLED=0 go build -o bin/read-waka-stats ./cmd/read-waka-stats
+
+docker-run:
+	docker compose run --rm app
