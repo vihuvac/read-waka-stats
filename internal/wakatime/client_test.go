@@ -2,6 +2,7 @@ package wakatime_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -29,7 +30,6 @@ func TestLoadMock(t *testing.T) {
 		t.Fatal(err)
 	}
 	if weekly == nil || len(weekly.Data.Languages) == 0 && weekly.Data.Timezone == "" {
-		// fixture may still have timezone
 		if weekly == nil {
 			t.Fatal("nil weekly")
 		}
@@ -40,5 +40,21 @@ func TestLoadMock(t *testing.T) {
 	}
 	if all == nil {
 		t.Fatal("nil all-time")
+	}
+}
+
+func TestLoadMockErrors(t *testing.T) {
+	c := &wakatime.Client{Mock: true, MockDir: t.TempDir()}
+	if _, err := c.FetchWeekly(context.Background()); err == nil {
+		t.Fatal("expected missing file error")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wakatime_stats.json")
+	if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.MockDir = dir
+	if _, err := c.FetchWeekly(context.Background()); err == nil {
+		t.Fatal("expected json error")
 	}
 }

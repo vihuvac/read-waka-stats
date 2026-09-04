@@ -33,6 +33,10 @@ type App struct {
 	Log  *logging.Logger
 	HTTP *httpx.Client
 	Now  time.Time
+	// GitHubAPIBase overrides the GitHub API origin (tests).
+	GitHubAPIBase string
+	// CloneURL overrides the profile-repo clone URL (tests).
+	CloneURL string
 }
 
 // New constructs the application.
@@ -51,7 +55,7 @@ func (a *App) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	gh := &githubx.Client{HTTP: a.HTTP, Token: a.Cfg.GHToken, Log: a.Log}
+	gh := &githubx.Client{HTTP: a.HTTP, Token: a.Cfg.GHToken, Log: a.Log, APIBase: a.GitHubAPIBase}
 	user, err := gh.FetchUser(ctx, a.Cfg.GHUser)
 	if err != nil {
 		return fmt.Errorf("github user: %w", err)
@@ -119,7 +123,7 @@ func (a *App) Run(ctx context.Context) error {
 	readmePath := "README.md"
 	defaultBranch := "main"
 	if !a.Cfg.DebugRun {
-		meta, err := fetchRepoMeta(ctx, a.HTTP, a.Cfg.GHToken, user.Login)
+		meta, err := fetchRepoMeta(ctx, a.HTTP, a.Cfg.GHToken, user.Login, a.GitHubAPIBase)
 		if err != nil {
 			a.Log.Warn("repo metadata: %v", err)
 		} else {
@@ -223,7 +227,7 @@ func (a *App) Run(ctx context.Context) error {
 		return writeOutput(content)
 	}
 
-	pushGH := &githubx.Client{HTTP: a.HTTP, Token: a.Cfg.PushToken, Log: a.Log}
+	pushGH := &githubx.Client{HTTP: a.HTTP, Token: a.Cfg.PushToken, Log: a.Log, APIBase: a.GitHubAPIBase}
 	return a.publishVerified(ctx, pushGH, user.Login, branch, defaultBranch, readmePath, content, chartBytes)
 }
 
@@ -241,15 +245,17 @@ func (a *App) publishVerified(
 			Owner:         owner,
 			Repo:          owner,
 			Token:         a.Cfg.PushToken,
-			WorkDir:       "repo",
+			WorkDir:       filepath.Join(os.TempDir(), "read-waka-stats-"+randomToken(8)),
 			Branch:        branch,
 			DefaultBranch: defaultBranch,
 			CommitMessage: a.Cfg.CommitMessage,
 			Log:           a.Log,
+			URL:           a.CloneURL,
 		})
 		if err != nil {
 			return fmt.Errorf("clone profile repo: %w", err)
 		}
+		defer os.RemoveAll(gitRepo.Root())
 
 		paths := make([]string, 0, 2)
 		if len(chartBytes) > 0 {
@@ -299,14 +305,18 @@ type githubReadmeJSON struct {
 }
 
 // fetchRepoMeta loads the profile repo default branch and README path from the GitHub API.
-func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login string) (repoMeta, error) {
+func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login, apiBase string) (repoMeta, error) {
 	meta := repoMeta{DefaultBranch: "main", Readme: "README.md"}
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	apiBase = strings.TrimRight(apiBase, "/")
 	headers := map[string]string{
 		"Authorization": "Bearer " + token,
 		"Accept":        "application/vnd.github+json",
 		"User-Agent":    "read-waka-stats",
 	}
-	body, status, err := httpc.GetJSON(ctx, fmt.Sprintf("https://api.github.com/repos/%s/%s", login, login), headers)
+	body, status, err := httpc.GetJSON(ctx, fmt.Sprintf("%s/repos/%s/%s", apiBase, login, login), headers)
 	if err != nil {
 		return meta, err
 	}
@@ -317,7 +327,7 @@ func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login string
 	if err := json.Unmarshal(body, &repo); err == nil && repo.DefaultBranch != "" {
 		meta.DefaultBranch = repo.DefaultBranch
 	}
-	body, status, err = httpc.GetJSON(ctx, fmt.Sprintf("https://api.github.com/repos/%s/%s/readme", login, login), headers)
+	body, status, err = httpc.GetJSON(ctx, fmt.Sprintf("%s/repos/%s/%s/readme", apiBase, login, login), headers)
 	if err == nil && status == 200 {
 		var file githubReadmeJSON
 		if err := json.Unmarshal(body, &file); err == nil && file.Path != "" {

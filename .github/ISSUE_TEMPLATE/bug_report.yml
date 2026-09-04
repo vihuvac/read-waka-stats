@@ -10,15 +10,12 @@ body:
     validations:
       required: true
 
-  - type: dropdown
+  - type: input
     id: version
     attributes:
       label: Affected version
-      description: What version of the boilerplate are you running?
-      options:
-        - 1.0.0 (Default)
-        - 1.0.4 (Edge)
-      default: 0
+      description: Tag, branch, or commit you are using (for example v1.0.0 or main). All 1.0.x releases are supported.
+      placeholder: v1.0.0
     validations:
       required: true
 

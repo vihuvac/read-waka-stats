@@ -9,7 +9,7 @@ services:
       - .env
     environment:
       DEBUG_RUN: "true"
-      MOCK_WAKATIME: "true"
+      MOCK_WAKATIME: "${MOCK_WAKATIME:-true}"
     volumes:
       - .:/src
       - go-mod-cache:/go/pkg/mod

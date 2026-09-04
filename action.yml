@@ -7,14 +7,14 @@ branding:
 
 inputs:
   GH_TOKEN:
-    description: 'GitHub token with permission to read profile data and publish verified commits to the profile repository'
+    description: 'GitHub token for API reads; also used for verified publish when PUSH_TOKEN is omitted'
     required: true
     default: ${{ github.token }}
 
   PUSH_TOKEN:
-    description: 'Optional token used only for verified commit publish. Use a fine-scoped token if you want to keep GH_TOKEN read-only'
+    description: 'Optional token for clone and verified commit publish only. When omitted, falls back to GH_TOKEN. Use a dedicated write token (or PAT whose owner can bypass require-PR rules) if GH_TOKEN should stay read-only'
     required: false
-    default: ${{ github.token }}
+    default: ''
 
   GH_USER:
     description: 'GitHub username to collect stats for. Defaults to the token owner'

@@ -117,10 +117,92 @@ func TestCreateCommitOnBranchStaleHead(t *testing.T) {
 	}
 }
 
-func TestCreateCommitOnBranchValidation(t *testing.T) {
+func TestCreateCommitOnBranchMoreValidation(t *testing.T) {
 	c := &githubx.Client{HTTP: httpx.New(5 * time.Second), Token: "t"}
-	_, err := c.CreateCommitOnBranch(context.Background(), githubx.CreateCommitInput{})
-	if err == nil || !strings.Contains(err.Error(), "owner") {
-		t.Fatalf("expected validation error, got %v", err)
+	cases := []githubx.CreateCommitInput{
+		{Owner: "", Repo: "b"},
+		{Owner: "a", Repo: ""},
+		{Owner: "a", Repo: "b"},
+		{Owner: "a", Repo: "b", BranchName: "main"},
+		{Owner: "a", Repo: "b", BranchName: "main", ExpectedHeadOid: "x"},
+		{Owner: "a", Repo: "b", BranchName: "main", ExpectedHeadOid: "x", FileAdditions: []githubx.FileAddition{{Path: ""}}},
+	}
+	for i, in := range cases {
+		if _, err := c.CreateCommitOnBranch(context.Background(), in); err == nil {
+			t.Fatalf("case %d: expected error", i)
+		}
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"createCommitOnBranch": map[string]any{
+					"commit": map[string]any{"oid": ""},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+	c2 := &githubx.Client{HTTP: httpx.New(5 * time.Second), Token: "t", APIBase: srv.URL}
+	_, err := c2.CreateCommitOnBranch(context.Background(), githubx.CreateCommitInput{
+		Owner: "a", Repo: "b", BranchName: "main", ExpectedHeadOid: "h",
+		FileAdditions: []githubx.FileAddition{{Path: "README.md", Contents: []byte("x")}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "empty commit oid") {
+		t.Fatalf("got %v", err)
+	}
+
+	srvBad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": "nope"})
+	}))
+	defer srvBad.Close()
+	cBad := &githubx.Client{HTTP: httpx.New(5 * time.Second), Token: "t", APIBase: srvBad.URL}
+	if _, err := cBad.CreateCommitOnBranch(context.Background(), githubx.CreateCommitInput{
+		Owner: "a", Repo: "b", BranchName: "main", ExpectedHeadOid: "h",
+		FileAdditions: []githubx.FileAddition{{Path: "README.md", Contents: []byte("x")}},
+	}); err == nil {
+		t.Fatal("expected unmarshal error")
+	}
+
+	// empty message uses default headline
+	var got string
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		got = string(raw)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"createCommitOnBranch": map[string]any{
+					"commit": map[string]any{"oid": "z"},
+				},
+			},
+		})
+	}))
+	defer srv2.Close()
+	c3 := &githubx.Client{HTTP: httpx.New(5 * time.Second), Token: "t", APIBase: srv2.URL}
+	oid, err := c3.CreateCommitOnBranch(context.Background(), githubx.CreateCommitInput{
+		Owner: "a", Repo: "b", BranchName: "main", ExpectedHeadOid: "h", Message: "   ",
+		FileAdditions: []githubx.FileAddition{{Path: "README.md", Contents: []byte("x")}},
+	})
+	if err != nil || oid != "z" {
+		t.Fatalf("oid=%s err=%v", oid, err)
+	}
+	if !strings.Contains(got, "Updated with Dev Metrics") {
+		t.Fatalf("body=%s", got)
 	}
 }
+
+func TestCreateCommitNonStaleGraphQLError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"errors": []map[string]string{{"message": "permission denied"}}})
+	}))
+	defer srv.Close()
+	c := &githubx.Client{HTTP: httpx.New(2 * time.Second), Token: "t", APIBase: srv.URL}
+	_, err := c.CreateCommitOnBranch(context.Background(), githubx.CreateCommitInput{
+		Owner: "a", Repo: "b", BranchName: "main", ExpectedHeadOid: "h",
+		FileAdditions: []githubx.FileAddition{{Path: "README.md", Contents: []byte("x")}},
+	})
+	if err == nil || strings.Contains(err.Error(), "stale") {
+		t.Fatalf("got %v", err)
+	}
+}
+

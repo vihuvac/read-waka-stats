@@ -55,6 +55,7 @@ func (y *YearContrib) UnmarshalJSON(data []byte) error {
 	}
 	y.Total = raw.Total
 	if len(raw.Year) == 0 || string(raw.Year) == "null" {
+		y.Year = 0
 		return nil
 	}
 	var asInt int
@@ -270,7 +271,7 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 		return nil, err
 	}
 	var lastErr error
-	for attempt := 0; attempt < 8; attempt++ {
+	for attempt := 0; attempt < graphqlAttempts(); attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiBase()+"/graphql", bytes.NewReader(payload))
 		if err != nil {
 			return nil, err
@@ -281,7 +282,9 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 		resp, err := c.HTTP.Do(ctx, req)
 		if err != nil {
 			lastErr = err
-			time.Sleep(time.Duration(attempt+1) * time.Second)
+			if sleep := graphqlBackoff(attempt); sleep > 0 {
+				time.Sleep(sleep)
+			}
 			continue
 		}
 		body, err := readClose(resp)
@@ -290,7 +293,9 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 		}
 		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 || resp.StatusCode == 429 {
 			lastErr = fmt.Errorf("graphql HTTP %d", resp.StatusCode)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
+			if sleep := graphqlBackoff(attempt); sleep > 0 {
+				time.Sleep(sleep)
+			}
 			continue
 		}
 		if resp.StatusCode != 200 {
@@ -306,6 +311,23 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 		return parsed.Data, nil
 	}
 	return nil, lastErr
+}
+
+// graphqlAttemptLimit is the max GraphQL tries (overridable in tests).
+var graphqlAttemptLimit = 8
+
+func graphqlAttempts() int {
+	if graphqlAttemptLimit < 1 {
+		return 1
+	}
+	return graphqlAttemptLimit
+}
+
+func graphqlBackoff(attempt int) time.Duration {
+	if graphqlAttemptLimit <= 2 {
+		return 0
+	}
+	return time.Duration(attempt+1) * time.Second
 }
 
 // readClose drains and closes an HTTP response body.
