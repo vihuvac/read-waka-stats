@@ -41,12 +41,15 @@ type YearContrib struct {
 	Total int `json:"total"`
 }
 
+// yearContribRaw is the wire form of YearContrib before normalizing year.
+type yearContribRaw struct {
+	Year  json.RawMessage `json:"year"`
+	Total int             `json:"total"`
+}
+
 // UnmarshalJSON accepts year as either a JSON number or a string (API drift).
 func (y *YearContrib) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		Year  json.RawMessage `json:"year"`
-		Total int             `json:"total"`
-	}
+	var raw yearContribRaw
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
@@ -79,6 +82,7 @@ type Client struct {
 	APIBase string // defaults to https://api.github.com
 }
 
+// apiBase returns the configured GitHub API origin, defaulting to api.github.com.
 func (c *Client) apiBase() string {
 	if c.APIBase != "" {
 		return strings.TrimRight(c.APIBase, "/")
@@ -86,12 +90,24 @@ func (c *Client) apiBase() string {
 	return "https://api.github.com"
 }
 
+// authHeaders returns standard GitHub REST authentication headers.
 func (c *Client) authHeaders() map[string]string {
 	return map[string]string{
 		"Authorization": "Bearer " + c.Token,
 		"Accept":        "application/vnd.github+json",
 		"User-Agent":    "read-waka-stats",
 	}
+}
+
+// userJSON is the subset of the GitHub user API response mapped into User.
+type userJSON struct {
+	Login             string `json:"login"`
+	NodeID            string `json:"node_id"`
+	Email             string `json:"email"`
+	DiskUsage         *int64 `json:"disk_usage"`
+	Hireable          *bool  `json:"hireable"`
+	PublicRepos       int    `json:"public_repos"`
+	OwnedPrivateRepos *int   `json:"owned_private_repos"`
 }
 
 // FetchUser loads the authenticated user, or a named user when login is set.
@@ -107,15 +123,7 @@ func (c *Client) FetchUser(ctx context.Context, login string) (User, error) {
 	if status != 200 {
 		return User{}, fmt.Errorf("GitHub user API HTTP %d: %s", status, string(body))
 	}
-	var raw struct {
-		Login             string `json:"login"`
-		NodeID            string `json:"node_id"`
-		Email             string `json:"email"`
-		DiskUsage         *int64 `json:"disk_usage"`
-		Hireable          *bool  `json:"hireable"`
-		PublicRepos       int    `json:"public_repos"`
-		OwnedPrivateRepos *int   `json:"owned_private_repos"`
-	}
+	var raw userJSON
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return User{}, err
 	}
@@ -138,6 +146,11 @@ func (c *Client) FetchUser(ctx context.Context, login string) (User, error) {
 	return u, nil
 }
 
+// trafficViewsJSON is the subset of the traffic views API response.
+type trafficViewsJSON struct {
+	Count int `json:"count"`
+}
+
 // FetchProfileViews returns weekly view count for owner/repo.
 func (c *Client) FetchProfileViews(ctx context.Context, ownerRepo string) (int, error) {
 	url := fmt.Sprintf("%s/repos/%s/traffic/views?per=week", c.apiBase(), ownerRepo)
@@ -148,13 +161,16 @@ func (c *Client) FetchProfileViews(ctx context.Context, ownerRepo string) (int, 
 	if status != 200 {
 		return 0, fmt.Errorf("traffic views HTTP %d", status)
 	}
-	var raw struct {
-		Count int `json:"count"`
-	}
+	var raw trafficViewsJSON
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return 0, err
 	}
 	return raw.Count, nil
+}
+
+// contributionsJSON is the github-contributions API envelope.
+type contributionsJSON struct {
+	Years []YearContrib `json:"years"`
 }
 
 // FetchContributions loads yearly contribution totals.
@@ -167,9 +183,7 @@ func (c *Client) FetchContributions(ctx context.Context, login string) ([]YearCo
 	if status != 200 {
 		return nil, fmt.Errorf("contributions HTTP %d", status)
 	}
-	var raw struct {
-		Years []YearContrib `json:"years"`
-	}
+	var raw contributionsJSON
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, err
 	}
@@ -238,13 +252,18 @@ query($owner: String!, $name: String!, $branch: String!, $id: ID!, $after: Strin
   }
 }`
 
-type gqlResponse struct {
-	Data   json.RawMessage `json:"data"`
-	Errors []struct {
-		Message string `json:"message"`
-	} `json:"errors"`
+// gqlError is a single GraphQL error entry.
+type gqlError struct {
+	Message string `json:"message"`
 }
 
+// gqlResponse is the top-level GraphQL HTTP response envelope.
+type gqlResponse struct {
+	Data   json.RawMessage `json:"data"`
+	Errors []gqlError      `json:"errors"`
+}
+
+// graphql executes a GraphQL query/mutation with retries on transient HTTP failures.
 func (c *Client) graphql(ctx context.Context, query string, variables map[string]any) (json.RawMessage, error) {
 	payload, err := json.Marshal(map[string]any{"query": query, "variables": variables})
 	if err != nil {
@@ -289,6 +308,7 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 	return nil, lastErr
 }
 
+// readClose drains and closes an HTTP response body.
 func readClose(resp *http.Response) ([]byte, error) {
 	defer resp.Body.Close()
 	buf := new(bytes.Buffer)
@@ -296,6 +316,7 @@ func readClose(resp *http.Response) ([]byte, error) {
 	return buf.Bytes(), err
 }
 
+// truncate returns at most the first n bytes of b as a string.
 func truncate(b []byte, n int) string {
 	s := string(b)
 	if len(s) <= n {
@@ -304,19 +325,23 @@ func truncate(b []byte, n int) string {
 	return s[:n]
 }
 
+// pageInfo is GraphQL pagination metadata.
 type pageInfo struct {
 	EndCursor   string `json:"endCursor"`
 	HasNextPage bool   `json:"hasNextPage"`
 }
 
+// langNode is a GraphQL primaryLanguage node.
 type langNode struct {
 	Name string `json:"name"`
 }
 
+// ownerNode is a GraphQL repository owner node.
 type ownerNode struct {
 	Login string `json:"login"`
 }
 
+// repoNode is a GraphQL repository node used for language and ownership stats.
 type repoNode struct {
 	Name            string    `json:"name"`
 	IsPrivate       bool      `json:"isPrivate"`
@@ -325,6 +350,7 @@ type repoNode struct {
 	PrimaryLanguage *langNode `json:"primaryLanguage"`
 }
 
+// toRepo maps a GraphQL repo node into the package Repository type.
 func toRepo(n repoNode) Repository {
 	r := Repository{
 		Name:      n.Name,
@@ -378,6 +404,21 @@ func (c *Client) FetchRepositories(ctx context.Context, login string, maxRepos i
 	return out, nil
 }
 
+// repoConnection is a paginated GraphQL repositories connection.
+type repoConnection struct {
+	Nodes    []repoNode `json:"nodes"`
+	PageInfo pageInfo   `json:"pageInfo"`
+}
+
+// reposPageJSON is the GraphQL user repositories / repositoriesContributedTo response.
+type reposPageJSON struct {
+	User struct {
+		Repositories              repoConnection `json:"repositories"`
+		RepositoriesContributedTo repoConnection `json:"repositoriesContributedTo"`
+	} `json:"user"`
+}
+
+// paginateRepos walks owned or contributed-to repositories until exhausted or maxNodes is reached.
 func (c *Client) paginateRepos(ctx context.Context, login string, owned bool, maxNodes int) ([]Repository, error) {
 	query := reposOwnedQuery
 	if !owned {
@@ -391,18 +432,7 @@ func (c *Client) paginateRepos(ctx context.Context, login string, owned bool, ma
 		if err != nil {
 			return nil, err
 		}
-		var parsed struct {
-			User struct {
-				Repositories struct {
-					Nodes    []repoNode `json:"nodes"`
-					PageInfo pageInfo   `json:"pageInfo"`
-				} `json:"repositories"`
-				RepositoriesContributedTo struct {
-					Nodes    []repoNode `json:"nodes"`
-					PageInfo pageInfo   `json:"pageInfo"`
-				} `json:"repositoriesContributedTo"`
-			} `json:"user"`
-		}
+		var parsed reposPageJSON
 		if err := json.Unmarshal(data, &parsed); err != nil {
 			return nil, err
 		}
@@ -429,6 +459,22 @@ type Branch struct {
 	Name string `json:"name"`
 }
 
+// refsConnection is a paginated GraphQL refs connection of branch names.
+type refsConnection struct {
+	Nodes    []Branch `json:"nodes"`
+	PageInfo pageInfo `json:"pageInfo"`
+}
+
+// branchRepository is the repository node in a branches GraphQL response.
+type branchRepository struct {
+	Refs refsConnection `json:"refs"`
+}
+
+// branchesPageJSON is the GraphQL repository refs response for branches.
+type branchesPageJSON struct {
+	Repository *branchRepository `json:"repository"`
+}
+
 // FetchBranches lists branch names for a repository.
 func (c *Client) FetchBranches(ctx context.Context, owner, name string) ([]Branch, error) {
 	var out []Branch
@@ -438,14 +484,7 @@ func (c *Client) FetchBranches(ctx context.Context, owner, name string) ([]Branc
 		if err != nil {
 			return nil, err
 		}
-		var parsed struct {
-			Repository *struct {
-				Refs struct {
-					Nodes    []Branch `json:"nodes"`
-					PageInfo pageInfo `json:"pageInfo"`
-				} `json:"refs"`
-			} `json:"repository"`
-		}
+		var parsed branchesPageJSON
 		if err := json.Unmarshal(data, &parsed); err != nil {
 			return nil, err
 		}
@@ -469,6 +508,32 @@ type Commit struct {
 	OID           string `json:"oid"`
 }
 
+// commitHistory is a paginated GraphQL commit history connection.
+type commitHistory struct {
+	Nodes    []Commit `json:"nodes"`
+	PageInfo pageInfo `json:"pageInfo"`
+}
+
+// commitTarget wraps a commit history connection on a ref target.
+type commitTarget struct {
+	History commitHistory `json:"history"`
+}
+
+// commitRef is a Git ref pointing at a commit history target.
+type commitRef struct {
+	Target commitTarget `json:"target"`
+}
+
+// commitRepository is the repository node in a commits GraphQL response.
+type commitRepository struct {
+	Ref *commitRef `json:"ref"`
+}
+
+// commitsPageJSON is the GraphQL repository ref target history response.
+type commitsPageJSON struct {
+	Repository *commitRepository `json:"repository"`
+}
+
 // FetchCommits lists commits by the given author on a branch.
 func (c *Client) FetchCommits(ctx context.Context, owner, name, branch, authorID string) ([]Commit, error) {
 	ref := branch
@@ -484,18 +549,7 @@ func (c *Client) FetchCommits(ctx context.Context, owner, name, branch, authorID
 		if err != nil {
 			return nil, err
 		}
-		var parsed struct {
-			Repository *struct {
-				Ref *struct {
-					Target struct {
-						History struct {
-							Nodes    []Commit `json:"nodes"`
-							PageInfo pageInfo `json:"pageInfo"`
-						} `json:"history"`
-					} `json:"target"`
-				} `json:"ref"`
-			} `json:"repository"`
-		}
+		var parsed commitsPageJSON
 		if err := json.Unmarshal(data, &parsed); err != nil {
 			return nil, err
 		}
@@ -528,6 +582,7 @@ func (c *Client) FetchLinguistColors(ctx context.Context) (LinguistColors, error
 	return parseLinguistColors(string(body)), nil
 }
 
+// parseLinguistColors extracts language name → color mappings from a linguist YAML dump.
 func parseLinguistColors(yml string) LinguistColors {
 	out := LinguistColors{}
 	lang := ""

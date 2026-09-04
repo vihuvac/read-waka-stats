@@ -20,12 +20,27 @@ type FileAddition struct {
 
 // CreateCommitInput configures a verified createCommitOnBranch mutation.
 type CreateCommitInput struct {
-	Owner            string
-	Repo             string
-	BranchName       string
-	Message          string
-	ExpectedHeadOid  string
-	FileAdditions    []FileAddition
+	Owner           string
+	Repo            string
+	BranchName      string
+	Message         string
+	ExpectedHeadOid string
+	FileAdditions   []FileAddition
+}
+
+// createCommitOID is the commit node returned by createCommitOnBranch.
+type createCommitOID struct {
+	OID string `json:"oid"`
+}
+
+// createCommitPayload is the createCommitOnBranch field of the mutation result.
+type createCommitPayload struct {
+	Commit createCommitOID `json:"commit"`
+}
+
+// createCommitResult is the createCommitOnBranch mutation payload.
+type createCommitResult struct {
+	CreateCommitOnBranch createCommitPayload `json:"createCommitOnBranch"`
 }
 
 // CreateCommitOnBranch creates a GitHub-signed commit via GraphQL.
@@ -93,13 +108,7 @@ mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
 		return "", err
 	}
 
-	var parsed struct {
-		CreateCommitOnBranch struct {
-			Commit struct {
-				OID string `json:"oid"`
-			} `json:"commit"`
-		} `json:"createCommitOnBranch"`
-	}
+	var parsed createCommitResult
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return "", err
 	}
@@ -110,6 +119,7 @@ mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
 	return oid, nil
 }
 
+// isStaleHeadMessage reports whether a GraphQL error indicates a mismatched expectedHeadOid.
 func isStaleHeadMessage(msg string) bool {
 	lower := strings.ToLower(msg)
 	return strings.Contains(lower, "expected head oid") ||
