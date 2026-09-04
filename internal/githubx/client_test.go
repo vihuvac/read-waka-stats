@@ -82,3 +82,28 @@ func TestYearContribUnmarshalInvalidYear(t *testing.T) {
 		t.Fatal("expected error for non-numeric year string")
 	}
 }
+
+func TestYearContribUnmarshalResetsYearOnAbsentOrNull(t *testing.T) {
+	var y githubx.YearContrib
+	if err := json.Unmarshal([]byte(`{"year":2024,"total":5}`), &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Year != 2024 || y.Total != 5 {
+		t.Fatalf("first decode: %+v", y)
+	}
+	if err := json.Unmarshal([]byte(`{"total":9}`), &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Year != 0 || y.Total != 9 {
+		t.Fatalf("absent year: %+v", y)
+	}
+	if err := json.Unmarshal([]byte(`{"year":2023,"total":2}`), &y); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"year":null,"total":7}`), &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Year != 0 || y.Total != 7 {
+		t.Fatalf("null year: %+v", y)
+	}
+}

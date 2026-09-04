@@ -55,6 +55,7 @@ func (y *YearContrib) UnmarshalJSON(data []byte) error {
 	}
 	y.Total = raw.Total
 	if len(raw.Year) == 0 || string(raw.Year) == "null" {
+		y.Year = 0
 		return nil
 	}
 	var asInt int
