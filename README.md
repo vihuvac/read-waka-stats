@@ -4,6 +4,15 @@ GitHub Action that refreshes your profile README with WakaTime activity and GitH
 
 Implemented in Go, packaged as a Docker action, and designed to update a marked section of your README on a schedule.
 
+<div align="center">
+  <img src="https://github.com/vihuvac/read-waka-stats/actions/workflows/ci.yml/badge.svg" alt="Tests Status" />
+  <img src="https://codecov.io/gh/vihuvac/read-waka-stats/branch/main/graph/badge.svg" alt="Coverage" />
+  <img src="https://img.shields.io/badge/Security%20Policy-Active-success" alt="Security Policy" />
+  <img src="https://img.shields.io/badge/Docker-Ready-blue" alt="Docker Ready" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License" />
+  <img src="https://img.shields.io/badge/Code%20of%20Conduct-Contributor%20Covenant-yellow" alt="Code of Conduct" />
+</div>
+
 ## Features
 
 - Weekly WakaTime languages, editors, projects, operating systems, and timezone
@@ -134,10 +143,28 @@ Set `MOCK_WAKATIME=true` to load fixtures from `MOCK_DATA_DIR` instead of callin
 
 ## Development
 
+Unit tests and a local binary:
+
 ```bash
 make test
+make vet
 make build
 ```
+
+### Local Docker (debug run)
+
+Run the action locally with Compose so you can exercise README generation without pushing a PR. Defaults: `DEBUG_RUN=true` (print markdown, skip clone/publish) and `MOCK_WAKATIME=true` (fixtures under `internal/testdata`). A real `INPUT_GH_TOKEN` is still required for GitHub API calls.
+
+```bash
+cp .env.example .env
+# Set INPUT_GH_TOKEN (and optionally INPUT_GH_USER) in .env
+
+docker compose build
+docker compose run --rm app
+# or: make docker-run
+```
+
+Production Action packaging stays in `Dockerfile`. Local iteration uses `Dockerfile.dev` (Go toolchain + bind-mounted source).
 
 Layout:
 
