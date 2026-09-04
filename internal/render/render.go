@@ -90,6 +90,7 @@ func MakeGraph(percent float64, version int) string {
 	return strings.Repeat(pair[0], filled) + strings.Repeat(pair[1], 25-filled)
 }
 
+// pad right-pads s with spaces to the given rune width.
 func pad(s string, width int) string {
 	n := utf8.RuneCountInString(s)
 	if n >= width {
@@ -98,6 +99,7 @@ func pad(s string, width int) string {
 	return s + strings.Repeat(" ", width-n)
 }
 
+// truncateRunes returns at most max runes from s.
 func truncateRunes(s string, max int) string {
 	if utf8.RuneCountInString(s) <= max {
 		return s
@@ -123,6 +125,7 @@ func MakeList(items []Item, topNum int, sortItems bool, symbolVersion int) strin
 	return strings.Join(lines, "\n")
 }
 
+// badge returns a shields.io markdown image for label/message.
 func badge(label, message, style string) string {
 	return fmt.Sprintf("![%s](https://img.shields.io/badge/%s-%s-blue?style=%s)\n\n",
 		label,
@@ -132,14 +135,17 @@ func badge(label, message, style string) string {
 	)
 }
 
+// t looks up a translation key via the renderer's bundle.
 func (r *Renderer) t(key string) string {
 	return r.T.T(key)
 }
 
+// sprintf formats a translated string that contains printf verbs.
 func sprintf(format string, args ...any) string {
 	return fmt.Sprintf(format, args...)
 }
 
+// intcomma formats n with thousands separators.
 func intcomma(n int) string {
 	s := strconv.Itoa(n)
 	if n < 0 {
@@ -158,6 +164,7 @@ func intcomma(n int) string {
 	return b.String()
 }
 
+// intword formats large integers as thousand/million/billion phrases.
 func intword(n int64) string {
 	abs := n
 	if abs < 0 {
@@ -175,6 +182,7 @@ func intword(n int64) string {
 	}
 }
 
+// naturalsize formats a byte count as Bytes/kB/MB/GB.
 func naturalsize(bytes int64) string {
 	if bytes < 1024 {
 		return fmt.Sprintf("%d Bytes", bytes)
@@ -247,6 +255,7 @@ func (r *Renderer) ShortGitHubInfo(user githubx.User, contribYear int, contribTo
 	return b.String()
 }
 
+// listOrEmpty formats WakaTime items as a progress list, or a localized empty message.
 func (r *Renderer) listOrEmpty(items []wakatime.StatItem, limit int) string {
 	if len(items) == 0 {
 		return r.t("No Activity Tracked This Week")
@@ -333,6 +342,7 @@ func (r *Renderer) AICodingStats(data wakatime.Data) string {
 	return s + "```\n\n"
 }
 
+// aiInsights builds localized reliance/prompt/session insight lines from AI metrics.
 func (r *Renderer) aiInsights(aiWritten, promptLen, promptsPerSession, manual float64) string {
 	reliance := r.t("AI Reliance: Hands-On")
 	if aiWritten >= 66 {

@@ -162,6 +162,7 @@ func (r *Repository) Publish(ctx context.Context, pub CommitPublisher, paths []s
 	return nil
 }
 
+// changedAdditions returns file additions for paths whose contents differ from HEAD.
 func (r *Repository) changedAdditions(paths []string) ([]githubx.FileAddition, error) {
 	seen := make(map[string]struct{}, len(paths))
 	var out []githubx.FileAddition
@@ -191,6 +192,7 @@ func (r *Repository) changedAdditions(paths []string) ([]githubx.FileAddition, e
 	return out, nil
 }
 
+// matchesHead reports whether data equals the file contents at HEAD for rel.
 func (r *Repository) matchesHead(rel string, data []byte) (bool, error) {
 	head, err := r.repo.Head()
 	if err != nil {

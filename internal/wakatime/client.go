@@ -78,6 +78,7 @@ func (c *Client) FetchAllTime(ctx context.Context) (*Stats, error) {
 	return c.fetch(ctx, "users/current/stats/all_time", "wakatime_all_time.json")
 }
 
+// fetch loads WakaTime stats from the API, or from a mock file when Mock is enabled.
 func (c *Client) fetch(ctx context.Context, path, mockFile string) (*Stats, error) {
 	if c.Mock {
 		return loadMock(c.MockDir, mockFile)
@@ -110,6 +111,7 @@ func (c *Client) fetch(ctx context.Context, path, mockFile string) (*Stats, erro
 	return &stats, nil
 }
 
+// loadMock reads and decodes a fixture stats JSON file from dir.
 func loadMock(dir, file string) (*Stats, error) {
 	data, err := os.ReadFile(filepath.Join(dir, file))
 	if err != nil {
@@ -132,6 +134,7 @@ func FindCategory(categories []Category, name string) *Category {
 	return nil
 }
 
+// truncate returns at most the first n bytes of b as a string.
 func truncate(b []byte, n int) string {
 	s := string(b)
 	if len(s) <= n {
