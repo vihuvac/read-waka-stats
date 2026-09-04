@@ -7,6 +7,9 @@ on:
     paths:
       - "cmd/**"
       - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ci.yml"
 
   pull_request:
     branches:
@@ -14,6 +17,9 @@ on:
     paths:
       - "cmd/**"
       - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ci.yml"
 
   # Manual runs (Actions → CI → Run workflow); not gated by path filters
   workflow_dispatch:
@@ -43,5 +49,6 @@ jobs:
         with:
           fail_ci_if_error: true
           disable_search: true
+          files: ./coverage.txt
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
