@@ -1,3 +1,4 @@
+// Package chart renders the lines-of-code timeline PNG.
 package chart
 
 import (
@@ -19,6 +20,18 @@ const maxLanguages = 5
 // Path is the default asset path written into the profile repository.
 const Path = "assets/bar_graph.png"
 
+// yqLang holds quarterly addition and deletion counts for one language.
+type yqLang struct {
+	add, del int
+}
+
+// langRank pairs a language name with its total change volume for sorting.
+type langRank struct {
+	name string
+	n    int
+}
+
+// parseHex converts a #RRGGBB or RRGGBB string to a color, or gray on failure.
 func parseHex(s string) color.Color {
 	s = trimHash(s)
 	var r, g, b uint8
@@ -29,15 +42,12 @@ func parseHex(s string) color.Color {
 	return color.RGBA{R: 128, G: 128, B: 128, A: 255}
 }
 
+// trimHash strips a leading '#' from a hex color string.
 func trimHash(s string) string {
 	if len(s) > 0 && s[0] == '#' {
 		return s[1:]
 	}
 	return s
-}
-
-type yqLang struct {
-	add, del int
 }
 
 // Draw writes a stacked bar chart of additions (positive) and deletions (negative).
@@ -64,13 +74,9 @@ func Draw(yearly commits.YearlyData, colors githubx.LinguistColors, dest string)
 	for yi, y := range years {
 		for q := 1; q <= 4; q++ {
 			bucket := yearly[y][q]
-			type pair struct {
-				name string
-				n    int
-			}
-			ranked := make([]pair, 0, len(bucket))
+			ranked := make([]langRank, 0, len(bucket))
 			for name, d := range bucket {
-				ranked = append(ranked, pair{name, d.Add + d.Del})
+				ranked = append(ranked, langRank{name, d.Add + d.Del})
 			}
 			sort.Slice(ranked, func(i, j int) bool { return ranked[i].n > ranked[j].n })
 			if len(ranked) > maxLanguages {

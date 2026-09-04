@@ -4,6 +4,15 @@ GitHub Action that refreshes your profile README with WakaTime activity and GitH
 
 Implemented in Go, packaged as a Docker action, and designed to update a marked section of your README on a schedule.
 
+<div align="center">
+  <img src="https://github.com/vihuvac/read-waka-stats/actions/workflows/ci.yml/badge.svg" alt="Tests Status" />
+  <img src="https://codecov.io/gh/vihuvac/read-waka-stats/branch/main/graph/badge.svg" alt="Coverage" />
+  <img src="https://img.shields.io/badge/Security%20Policy-Active-success" alt="Security Policy" />
+  <img src="https://img.shields.io/badge/Docker-Ready-blue" alt="Docker Ready" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License" />
+  <img src="https://img.shields.io/badge/Code%20of%20Conduct-Contributor%20Covenant-yellow" alt="Code of Conduct" />
+</div>
+
 ## Features
 
 - Weekly WakaTime languages, editors, projects, operating systems, and timezone
@@ -27,6 +36,15 @@ Place markers in your profile README. The action replaces everything between the
 ```
 
 Stats are written as markdown: shields.io badges, fenced `text` progress bars (reliable in GitHub README rendering), and a committed PNG for the lines-of-code timeline.
+
+### Examples
+
+Sanitized sample configs and section output (no live account data):
+
+- [examples/](examples/README.md) — index
+- [full](examples/full/) — most sections enabled
+- [minimal](examples/minimal/) — languages and timezone only
+- [ai-and-chart](examples/ai-and-chart/) — AI stats, commit hours, and LOC chart
 
 ## Quick start
 
@@ -62,11 +80,13 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: vihuvac/read-waka-stats@main
+      - uses: vihuvac/read-waka-stats@v1.0.0
         with:
           WAKATIME_API_KEY: ${{ secrets.WAKATIME_API_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 ```
+
+Pin a release tag such as `@v1.0.0` (prefer tags over `@main`). Bump the tag when you upgrade.
 
 If you omit `GH_TOKEN`, the action uses `${{ github.token }}`. Grant `contents: write` so the action can publish README and chart updates.
 
@@ -134,10 +154,30 @@ Set `MOCK_WAKATIME=true` to load fixtures from `MOCK_DATA_DIR` instead of callin
 
 ## Development
 
+Unit tests and a local binary:
+
 ```bash
 make test
+make vet
 make build
 ```
+
+### Local Docker (debug run)
+
+Run the action locally with Compose so you can exercise README generation without pushing a PR. Defaults: `DEBUG_RUN=true` (print markdown, skip clone/publish) and `MOCK_WAKATIME=true` (fixtures under `internal/testdata`). A real `INPUT_GH_TOKEN` is still required for GitHub API calls.
+
+Local output is **hybrid**: WakaTime sections come from fixtures; GitHub sections use the live API for the token owner (or `INPUT_GH_USER`). Do not commit that markdown, root `assets/` chart PNGs from debug runs, or tokens into this repository—see [examples/](examples/README.md) for sanitized samples instead.
+
+```bash
+cp .env.example .env
+# Set INPUT_GH_TOKEN (and optionally INPUT_GH_USER) in .env
+
+docker compose build
+docker compose run --rm app
+# or: make docker-run
+```
+
+Production Action packaging stays in `Dockerfile`. Local iteration uses `Dockerfile.dev` (Go toolchain + bind-mounted source).
 
 Layout:
 

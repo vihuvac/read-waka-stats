@@ -71,6 +71,7 @@ func (c *Calculator) Calculate(ctx context.Context, repos []githubx.Repository) 
 	return res, nil
 }
 
+// updateRepo aggregates branches and commits for a single repository into res.
 func (c *Calculator) updateRepo(ctx context.Context, repo githubx.Repository, res Result) error {
 	branches, err := c.GH.FetchBranches(ctx, repo.Owner, repo.Name)
 	if err != nil {
@@ -163,6 +164,7 @@ func CountDayParts(dates DateData, tzName string) ([4]int, [7]int) {
 	return dayTimes, weekDays
 }
 
+// parseCommitTime parses a GitHub committedDate, accepting RFC3339 or a Z-suffixed layout.
 func parseCommitTime(raw string) (time.Time, error) {
 	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
 		return ts, nil

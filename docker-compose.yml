@@ -1,0 +1,18 @@
+services:
+  app:
+    container_name: read-waka-stats-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    working_dir: /src
+    env_file:
+      - .env
+    environment:
+      DEBUG_RUN: "true"
+      MOCK_WAKATIME: "true"
+    volumes:
+      - .:/src
+      - go-mod-cache:/go/pkg/mod
+
+volumes:
+  go-mod-cache:

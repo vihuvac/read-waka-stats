@@ -90,6 +90,7 @@ func MakeGraph(percent float64, version int) string {
 	return strings.Repeat(pair[0], filled) + strings.Repeat(pair[1], 25-filled)
 }
 
+// pad right-pads s with spaces to the given rune width.
 func pad(s string, width int) string {
 	n := utf8.RuneCountInString(s)
 	if n >= width {
@@ -98,6 +99,7 @@ func pad(s string, width int) string {
 	return s + strings.Repeat(" ", width-n)
 }
 
+// truncateRunes returns at most max runes from s.
 func truncateRunes(s string, max int) string {
 	if utf8.RuneCountInString(s) <= max {
 		return s
@@ -123,6 +125,7 @@ func MakeList(items []Item, topNum int, sortItems bool, symbolVersion int) strin
 	return strings.Join(lines, "\n")
 }
 
+// badge returns a shields.io markdown image for label/message.
 func badge(label, message, style string) string {
 	return fmt.Sprintf("![%s](https://img.shields.io/badge/%s-%s-blue?style=%s)\n\n",
 		label,
@@ -132,14 +135,17 @@ func badge(label, message, style string) string {
 	)
 }
 
+// t looks up a translation key via the renderer's bundle.
 func (r *Renderer) t(key string) string {
 	return r.T.T(key)
 }
 
+// sprintf formats a translated string that contains printf verbs.
 func sprintf(format string, args ...any) string {
 	return fmt.Sprintf(format, args...)
 }
 
+// intcomma formats n with thousands separators.
 func intcomma(n int) string {
 	s := strconv.Itoa(n)
 	if n < 0 {
@@ -158,6 +164,7 @@ func intcomma(n int) string {
 	return b.String()
 }
 
+// intword formats large integers as thousand/million/billion phrases.
 func intword(n int64) string {
 	abs := n
 	if abs < 0 {
@@ -175,6 +182,7 @@ func intword(n int64) string {
 	}
 }
 
+// naturalsize formats a byte count as Bytes/kB/MB/GB.
 func naturalsize(bytes int64) string {
 	if bytes < 1024 {
 		return fmt.Sprintf("%d Bytes", bytes)
@@ -247,6 +255,7 @@ func (r *Renderer) ShortGitHubInfo(user githubx.User, contribYear int, contribTo
 	return b.String()
 }
 
+// listOrEmpty formats WakaTime items as a progress list, or a localized empty message.
 func (r *Renderer) listOrEmpty(items []wakatime.StatItem, limit int) string {
 	if len(items) == 0 {
 		return r.t("No Activity Tracked This Week")
@@ -288,7 +297,8 @@ func (r *Renderer) AICodingStats(data wakatime.Data) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🤖 **%s** \n\n```text\n", r.t("AI Coding This Week")))
 	if ai == nil || data.AISessions == 0 {
-		b.WriteString(r.t("No AI Coding Activity Tracked This Week") + "\n```\n\n")
+		b.WriteString(r.t("No AI Coding Activity Tracked This Week"))
+		b.WriteString("\n```\n\n")
 		return b.String()
 	}
 
@@ -325,14 +335,17 @@ func (r *Renderer) AICodingStats(data wakatime.Data) string {
 				Percent: math.Round(float64(m.Lines)/float64(totalLines)*10000) / 100,
 			})
 		}
-		b.WriteString(MakeList(items, 5, true, r.Cfg.SymbolVersion) + "\n\n")
+		b.WriteString(MakeList(items, 5, true, r.Cfg.SymbolVersion))
+		b.WriteString("\n\n")
 	}
 
-	b.WriteString(r.aiInsights(aiWritten, data.AIPromptLengthAvg, data.AIPromptEventsAvgPerSession, manual) + "\n")
+	b.WriteString(r.aiInsights(aiWritten, data.AIPromptLengthAvg, data.AIPromptEventsAvgPerSession, manual))
+	b.WriteString("\n")
 	s := strings.TrimSuffix(b.String(), "\n")
 	return s + "```\n\n"
 }
 
+// aiInsights builds localized reliance/prompt/session insight lines from AI metrics.
 func (r *Renderer) aiInsights(aiWritten, promptLen, promptsPerSession, manual float64) string {
 	reliance := r.t("AI Reliance: Hands-On")
 	if aiWritten >= 66 {
@@ -357,10 +370,14 @@ func (r *Renderer) aiInsights(aiWritten, promptLen, promptsPerSession, manual fl
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🔎 %s:\n", r.t("AI Coding Insights")))
-	b.WriteString(sprintf(r.t("AI Reliance Detail"), reliance, fmt.Sprintf("%.2f", aiWritten)) + "\n")
-	b.WriteString(sprintf(r.t("Prompt Style Detail"), promptStyle, intcomma(int(math.Round(promptLen)))) + "\n")
-	b.WriteString(sprintf(r.t("Session Style Detail"), session, fmt.Sprintf("%.1f", promptsPerSession)) + "\n")
-	b.WriteString(sprintf(r.t("Review Style Detail"), review, fmt.Sprintf("%.2f", manual)) + "\n")
+	b.WriteString(sprintf(r.t("AI Reliance Detail"), reliance, fmt.Sprintf("%.2f", aiWritten)))
+	b.WriteString("\n")
+	b.WriteString(sprintf(r.t("Prompt Style Detail"), promptStyle, intcomma(int(math.Round(promptLen)))))
+	b.WriteString("\n")
+	b.WriteString(sprintf(r.t("Session Style Detail"), session, fmt.Sprintf("%.1f", promptsPerSession)))
+	b.WriteString("\n")
+	b.WriteString(sprintf(r.t("Review Style Detail"), review, fmt.Sprintf("%.2f", manual)))
+	b.WriteString("\n")
 	return b.String()
 }
 

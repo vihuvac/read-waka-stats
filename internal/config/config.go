@@ -115,6 +115,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// getenvDefault returns the environment value for key, or fallback when unset/empty.
 func getenvDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -122,6 +123,7 @@ func getenvDefault(key, fallback string) string {
 	return fallback
 }
 
+// truthyDefault parses a boolean Actions input, returning defaultVal when unset/empty.
 func truthyDefault(key string, defaultVal bool) bool {
 	v, ok := os.LookupEnv(key)
 	if !ok || strings.TrimSpace(v) == "" {
@@ -130,6 +132,7 @@ func truthyDefault(key string, defaultVal bool) bool {
 	return logging.ParseBoolTruth(v)
 }
 
+// parseIntDefault parses an integer Actions input, returning fallback on missing or invalid values.
 func parseIntDefault(key string, fallback int) int {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
@@ -142,6 +145,7 @@ func parseIntDefault(key string, fallback int) int {
 	return n
 }
 
+// parseList splits a comma-separated Actions input into trimmed non-empty parts.
 func parseList(raw string) []string {
 	raw = strings.ReplaceAll(raw, " ", "")
 	if raw == "" {
@@ -171,6 +175,7 @@ func pythonToGoTime(layout string) string {
 	return replacer.Replace(layout)
 }
 
+// firstNonEmpty returns the first non-blank string among vals, or "".
 func firstNonEmpty(vals ...string) string {
 	for _, v := range vals {
 		if strings.TrimSpace(v) != "" {

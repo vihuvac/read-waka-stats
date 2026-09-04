@@ -227,6 +227,8 @@ func (a *App) Run(ctx context.Context) error {
 	return a.publishVerified(ctx, pushGH, user.Login, branch, defaultBranch, readmePath, content, chartBytes)
 }
 
+// publishVerified clones the profile repo and creates a verified commit with README/chart updates.
+// It retries when the branch tip changes between clone and publish (ErrStaleHead).
 func (a *App) publishVerified(
 	ctx context.Context,
 	pushGH *githubx.Client,
@@ -280,11 +282,23 @@ func (a *App) publishVerified(
 	return fmt.Errorf("publish failed after %d attempts: %w", maxPublishAttempts, lastErr)
 }
 
+// repoMeta holds profile-repository defaults used when cloning and updating the README.
 type repoMeta struct {
 	DefaultBranch string
 	Readme        string
 }
 
+// githubRepoJSON is the subset of the GitHub repo API response used for metadata.
+type githubRepoJSON struct {
+	DefaultBranch string `json:"default_branch"`
+}
+
+// githubReadmeJSON is the subset of the GitHub README API response used for path detection.
+type githubReadmeJSON struct {
+	Path string `json:"path"`
+}
+
+// fetchRepoMeta loads the profile repo default branch and README path from the GitHub API.
 func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login string) (repoMeta, error) {
 	meta := repoMeta{DefaultBranch: "main", Readme: "README.md"}
 	headers := map[string]string{
@@ -299,17 +313,13 @@ func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login string
 	if status != 200 {
 		return meta, fmt.Errorf("HTTP %d", status)
 	}
-	var repo struct {
-		DefaultBranch string `json:"default_branch"`
-	}
+	var repo githubRepoJSON
 	if err := json.Unmarshal(body, &repo); err == nil && repo.DefaultBranch != "" {
 		meta.DefaultBranch = repo.DefaultBranch
 	}
 	body, status, err = httpc.GetJSON(ctx, fmt.Sprintf("https://api.github.com/repos/%s/%s/readme", login, login), headers)
 	if err == nil && status == 200 {
-		var file struct {
-			Path string `json:"path"`
-		}
+		var file githubReadmeJSON
 		if err := json.Unmarshal(body, &file); err == nil && file.Path != "" {
 			meta.Readme = file.Path
 		}
@@ -317,6 +327,7 @@ func fetchRepoMeta(ctx context.Context, httpc *httpx.Client, token, login string
 	return meta, nil
 }
 
+// writeOutput prints stats to stdout, or appends them to GITHUB_OUTPUT when set.
 func writeOutput(stats string) error {
 	path := os.Getenv("GITHUB_OUTPUT")
 	if path == "" {
@@ -334,6 +345,7 @@ func writeOutput(stats string) error {
 	return err
 }
 
+// randomToken returns an n-character alphanumeric string for multiline output delimiters.
 func randomToken(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, n)
