@@ -3,6 +3,7 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -18,7 +19,10 @@ const (
 	LevelDebug
 )
 
-// Logger writes colored, leveled messages to stderr.
+// Output is where New loggers write (stderr by default; tests may redirect).
+var Output io.Writer = os.Stderr
+
+// Logger writes colored, leveled messages to Output.
 type Logger struct {
 	level  Level
 	logger *log.Logger
@@ -30,9 +34,13 @@ func New(debug bool) *Logger {
 	if debug {
 		level = LevelDebug
 	}
+	w := Output
+	if w == nil {
+		w = os.Stderr
+	}
 	return &Logger{
 		level:  level,
-		logger: log.New(os.Stderr, "", 0),
+		logger: log.New(w, "", 0),
 	}
 }
 
@@ -64,9 +72,6 @@ func (l *Logger) Info(format string, args ...any) {
 
 // Warn logs a yellow warning.
 func (l *Logger) Warn(format string, args ...any) {
-	if l.level < LevelWarn && l.level < LevelError {
-		return
-	}
 	l.logger.Printf("%s%s%s", colorYellow, fmt.Sprintf(format, args...), colorReset)
 }
 
@@ -75,10 +80,13 @@ func (l *Logger) Error(format string, args ...any) {
 	l.logger.Printf("%s%s%s", colorRed, fmt.Sprintf(format, args...), colorReset)
 }
 
+// ExitFunc is the process exit hook used by Fatal (overridable in tests).
+var ExitFunc = os.Exit
+
 // Fatal logs an error and exits.
 func (l *Logger) Fatal(format string, args ...any) {
 	l.Error(format, args...)
-	os.Exit(1)
+	ExitFunc(1)
 }
 
 // ParseBoolTruth returns whether s is a truthy Actions input.
