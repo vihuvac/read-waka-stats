@@ -37,6 +37,10 @@ type App struct {
 	GitHubAPIBase string
 	// CloneURL overrides the profile-repo clone URL (tests).
 	CloneURL string
+	// WakaMaxAttempts overrides WakaTime calculating retries (tests).
+	WakaMaxAttempts int
+	// WakaSleep overrides the pause between WakaTime retries (tests).
+	WakaSleep func(time.Duration)
 }
 
 // New constructs the application.
@@ -63,12 +67,14 @@ func (a *App) Run(ctx context.Context) error {
 	a.Log.Info("Current user: %s", user.Login)
 
 	waka := &wakatime.Client{
-		HTTP:    a.HTTP,
-		APIURL:  a.Cfg.WakaTimeAPIURL,
-		APIKey:  a.Cfg.WakaTimeAPIKey,
-		Mock:    a.Cfg.MockWakaTime,
-		MockDir: a.Cfg.MockDataDir,
-		Log:     a.Log,
+		HTTP:        a.HTTP,
+		APIURL:      a.Cfg.WakaTimeAPIURL,
+		APIKey:      a.Cfg.WakaTimeAPIKey,
+		Mock:        a.Cfg.MockWakaTime,
+		MockDir:     a.Cfg.MockDataDir,
+		Log:         a.Log,
+		MaxAttempts: a.WakaMaxAttempts,
+		Sleep:       a.WakaSleep,
 	}
 
 	rnd := render.Renderer{Cfg: a.Cfg, T: bundle, Now: a.Now}
@@ -105,17 +111,16 @@ func (a *App) Run(ctx context.Context) error {
 	if a.Cfg.ShowTotalCodeTime || a.Cfg.ShowAICodeTime {
 		all, err := waka.FetchAllTime(ctx)
 		if err != nil {
-			a.Log.Warn("WakaTime all-time unavailable: %v", err)
-		} else if all != nil {
-			if a.Cfg.ShowTotalCodeTime && all.Data.HumanReadableTotal != "" {
-				stats.WriteString(rnd.CodeTimeBadge(all.Data.HumanReadableTotal))
-			}
-			if a.Cfg.ShowAICodeTime {
-				if cat := wakatime.FindCategory(all.Data.Categories, "AI Coding"); cat != nil {
-					stats.WriteString(rnd.AICodeTimeBadge(cat.Text))
-				} else {
-					a.Log.Warn("No all-time AI coding data, skipping badge")
-				}
+			return fmt.Errorf("WakaTime all-time: %w", err)
+		}
+		if a.Cfg.ShowTotalCodeTime && all.Data.HumanReadableTotal != "" {
+			stats.WriteString(rnd.CodeTimeBadge(all.Data.HumanReadableTotal))
+		}
+		if a.Cfg.ShowAICodeTime {
+			if cat := wakatime.FindCategory(all.Data.Categories, "AI Coding"); cat != nil {
+				stats.WriteString(rnd.AICodeTimeBadge(cat.Text))
+			} else {
+				a.Log.Warn("No all-time AI coding data, skipping badge")
 			}
 		}
 	}
@@ -166,20 +171,19 @@ func (a *App) Run(ctx context.Context) error {
 
 	weekly, err := waka.FetchWeekly(ctx)
 	if err != nil {
-		a.Log.Warn("WakaTime weekly unavailable: %v", err)
-	} else if weekly != nil {
-		tz := weekly.Data.Timezone
-		if tz == "" {
-			tz = "UTC"
-		}
-		if a.Cfg.ShowCommit || a.Cfg.ShowDaysOfWeek {
-			day, week := commits.CountDayParts(commitResult.Dates, tz)
-			stats.WriteString(rnd.CommitDayTime(day, week))
-		}
-		stats.WriteString(rnd.WeeklyWaka(weekly.Data))
-		if a.Cfg.ShowAICoding {
-			stats.WriteString(rnd.AICodingStats(weekly.Data))
-		}
+		return fmt.Errorf("WakaTime weekly: %w", err)
+	}
+	tz := weekly.Data.Timezone
+	if tz == "" {
+		tz = "UTC"
+	}
+	if a.Cfg.ShowCommit || a.Cfg.ShowDaysOfWeek {
+		day, week := commits.CountDayParts(commitResult.Dates, tz)
+		stats.WriteString(rnd.CommitDayTime(day, week))
+	}
+	stats.WriteString(rnd.WeeklyWaka(weekly.Data))
+	if a.Cfg.ShowAICoding {
+		stats.WriteString(rnd.AICodingStats(weekly.Data))
 	}
 
 	if a.Cfg.ShowLanguageRepo {

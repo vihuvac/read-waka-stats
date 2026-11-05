@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,30 +45,104 @@ func TestFetchWeeklyHTTP(t *testing.T) {
 	}
 }
 
-func TestFetchHTTPAccepted(t *testing.T) {
+func TestFetchHTTPAcceptedRetriesThenSucceeds(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		if n < 3 {
+			w.WriteHeader(202)
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"data":{"timezone":"UTC","is_up_to_date":true,"languages":[{"name":"Go","text":"1 hr","percent":100}]}}`))
+	}))
+	defer srv.Close()
+
+	c := &wakatime.Client{
+		HTTP:        httpx.New(5 * time.Second),
+		APIURL:      srv.URL + "/",
+		APIKey:      "k",
+		Log:         logging.New(true),
+		MaxAttempts: 5,
+		Sleep:       func(time.Duration) {},
+	}
+	stats, err := c.FetchWeekly(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats == nil || stats.Data.Timezone != "UTC" {
+		t.Fatalf("got %+v", stats)
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("calls=%d want 3", calls.Load())
+	}
+}
+
+func TestFetchHTTPAcceptedExhaustsRetries(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(202)
 	}))
 	defer srv.Close()
-	c := &wakatime.Client{HTTP: httpx.New(5 * time.Second), APIURL: srv.URL + "/", APIKey: "k"}
-	stats, err := c.FetchAllTime(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	c := &wakatime.Client{
+		HTTP:        httpx.New(5 * time.Second),
+		APIURL:      srv.URL + "/",
+		APIKey:      "k",
+		Log:         logging.New(true),
+		MaxAttempts: 3,
+		Sleep:       func(time.Duration) {},
 	}
-	if stats != nil {
-		t.Fatal("expected nil while calculating")
+	stats, err := c.FetchAllTime(context.Background())
+	if err == nil || stats != nil {
+		t.Fatalf("stats=%v err=%v", stats, err)
+	}
+	if !strings.Contains(err.Error(), "still calculating") {
+		t.Fatalf("got %v", err)
 	}
 }
 
-func TestFetchHTTP201(t *testing.T) {
+func TestFetchHTTP201ExhaustsRetries(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(201)
 	}))
 	defer srv.Close()
-	c := &wakatime.Client{HTTP: httpx.New(5 * time.Second), APIURL: srv.URL + "/", APIKey: "k", Log: logging.New(true)}
+	c := &wakatime.Client{
+		HTTP:        httpx.New(5 * time.Second),
+		APIURL:      srv.URL + "/",
+		APIKey:      "k",
+		Log:         logging.New(true),
+		MaxAttempts: 2,
+		Sleep:       func(time.Duration) {},
+	}
 	stats, err := c.FetchAllTime(context.Background())
-	if err != nil || stats != nil {
+	if err == nil || stats != nil {
 		t.Fatalf("stats=%v err=%v", stats, err)
+	}
+}
+
+func TestFetchRetriesStaleStats(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		if n == 1 {
+			_, _ = w.Write([]byte(`{"data":{"timezone":"UTC","is_up_to_date":false,"languages":[]}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"timezone":"UTC","is_up_to_date":true,"languages":[{"name":"Go","text":"1 hr","percent":100}]}}`))
+	}))
+	defer srv.Close()
+	c := &wakatime.Client{
+		HTTP:        httpx.New(5 * time.Second),
+		APIURL:      srv.URL + "/",
+		APIKey:      "k",
+		MaxAttempts: 3,
+		Sleep:       func(time.Duration) {},
+	}
+	stats, err := c.FetchWeekly(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats.Data.Languages) != 1 || calls.Load() != 2 {
+		t.Fatalf("stats=%+v calls=%d", stats.Data, calls.Load())
 	}
 }
 
