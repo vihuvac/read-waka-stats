@@ -217,8 +217,42 @@ func TestRunWakaAndWeeklyFailures(t *testing.T) {
 	a.GitHubAPIBase = gh.URL
 	a.HTTP = httpx.New(2 * time.Second)
 	t.Setenv("GITHUB_OUTPUT", filepath.Join(t.TempDir(), "o.txt"))
-	if err := a.Run(context.Background()); err != nil {
-		t.Fatal(err)
+	if err := a.Run(context.Background()); err == nil {
+		t.Fatal("expected WakaTime failure to abort the run")
+	}
+}
+
+func TestRunWakaHTTPStillCalculatingFails(t *testing.T) {
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"login": "alice", "node_id": "U", "id": 1})
+	}))
+	defer gh.Close()
+	waka := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(202)
+	}))
+	defer waka.Close()
+
+	cfg := &config.Config{
+		GHToken: "t", Locale: "en", DebugRun: true, WakaTimeAPIKey: "secret",
+		WakaTimeAPIURL: waka.URL + "/",
+		ShowTotalCodeTime: false, ShowAICodeTime: false, ShowLanguageRepo: false,
+		ShowLOCChart: false, ShowCommit: false, ShowDaysOfWeek: false, ShowLinesOfCode: false,
+		ShowProfileViews: false, ShowShortInfo: false, ShowAICoding: false,
+		ShowLanguage: true, ShowEditors: false, ShowProjects: false, ShowOS: false, ShowTimezone: false,
+		ShowUpdatedDate: false, BadgeStyle: "flat",
+	}
+	a := New(cfg, logging.New(false))
+	a.GitHubAPIBase = gh.URL
+	a.HTTP = httpx.New(2 * time.Second)
+	a.WakaMaxAttempts = 2
+	a.WakaSleep = func(time.Duration) {}
+	t.Setenv("GITHUB_OUTPUT", filepath.Join(t.TempDir(), "o.txt"))
+	err := a.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected error when WakaTime keeps returning 202")
+	}
+	if !strings.Contains(err.Error(), "still calculating") && !strings.Contains(err.Error(), "WakaTime") {
+		t.Fatalf("got %v", err)
 	}
 }
 
