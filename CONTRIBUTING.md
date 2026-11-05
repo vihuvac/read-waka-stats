@@ -15,3 +15,22 @@ submit a Pull Request.
 8. Keep business logic in `internal/` packages with unit tests next to the code.
 9. Do not add Python or other runtimes to the production Docker image (`Dockerfile`).
 10. README list ranking must sort the full dataset before applying `SHOW_LANGUAGE_COUNT` (or other limits).
+11. Update [`CHANGELOG.md`](./CHANGELOG.md) for every user-facing or behavior change (see below).
+
+## Changelog
+
+Keep [`CHANGELOG.md`](./CHANGELOG.md) in sync with the work you ship. Follow
+[Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+- **Same unreleased / untagged work:** append under the current heading (usually
+  `[Unreleased]` or the latest dated version that has not been published yet).
+  Do not invent a new version for follow-up commits on the same release.
+- **New release:** when cutting a distinct version, move `[Unreleased]` entries
+  into a new `## [x.y.z] - YYYY-MM-DD` section, leave an empty `## [Unreleased]`
+  above it, and tag the release to match.
+- **Entry shape:** optional `Related tickets:` list, then `### Added` /
+  `### Changed` / `### Fixed` / `### Removed` as needed. Prefer a **bold lead-in**
+  and a short explanation of *why* / impact, not only a file list.
+- Skip the changelog only for pure chore noise (typos in comments, CI-only
+  tweaks with no consumer impact) unless the PR also changes docs or behavior.

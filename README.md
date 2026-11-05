@@ -198,6 +198,14 @@ internal/i18n/         embedded translations
 
 Requirements: Go 1.24+.
 
+## Troubleshooting
+
+### WakaTime secret
+
+Use a [personal OAuth token](https://wakatime.com/oauth) (API keys are plugin-only as of November 2026). Store it in the `WAKATIME_API_KEY` secret; the action still sends it as `api_key` because that is how WakaTime authenticates query requests.
+
+When stats are still calculating, WakaTime returns HTTP 201/202 (or `is_up_to_date: false`). The action retries automatically a few times (about 20s total). Re-run the workflow once calculation finishes, or wait for the next schedule.
+
 ## Security
 
 - Prefer `contents: write` on `github.token` for public profile repos.
